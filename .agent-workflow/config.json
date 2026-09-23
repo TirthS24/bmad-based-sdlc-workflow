@@ -1,0 +1,22 @@
+{
+  "test_globs": [
+    "tests/**/*.py",
+    "**/*.test.ts",
+    "**/*.test.js",
+    "E2E/tests/**/*.spec.ts"
+  ],
+  "commands": {
+    "unit": "pytest",
+    "lint": "yarn lint",
+    "complexity": "",
+    "e2e": "",
+    "a11y": ""
+  },
+  "surfaces": ["ui", "api"],
+  "dev_url": "http://localhost:3000",
+  "loop_caps": {
+    "implement": 5,
+    "review": 3,
+    "verify_fix": 2
+  }
+}

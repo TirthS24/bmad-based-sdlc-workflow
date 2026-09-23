@@ -1,0 +1,129 @@
+---
+description: Backend engineering rules for Django, DRF, GraphQL, and PostgreSQL changes.
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Backend Engineering Rules
+
+These rules govern backend code changes when using AI tools.
+
+## 1. Tech Stack Assumptions
+- Django
+- Django REST Framework
+- GraphQL (where applicable)
+- PostgreSQL
+- AWS (Lambda, Batch, S3, DynamoDB)
+- Sentry enabled
+
+---
+
+## 2. Core Principles
+- Correctness > performance > elegance
+- ORM-first (raw SQL only when unavoidable)
+- Idempotent operations
+- Safe for large datasets
+
+---
+
+## 3. Query Rules (CRITICAL)
+- No N+1 queries
+- Always use:
+  - `select_related` for FK
+  - `prefetch_related` for M2M / reverse FK
+- Use annotations instead of Python loops
+- Paginate all list APIs
+
+---
+
+## 4. Serialization Rules
+- Prefer:
+  - DRF Serializers
+  - or GraphQL resolvers
+- Avoid manual `for` loops building response dicts
+- Computed fields must be annotated in queryset if possible
+
+---
+
+## 5. Transaction & Update Rules
+- Use `transaction.atomic()` where needed
+- Bulk update when possible
+- Avoid per-row updates inside loops
+
+---
+
+## 6. Logging Rules
+- Use structured logging
+- Log levels:
+  - INFO: flow-level
+  - DEBUG: per-record
+  - WARNING: data issues
+  - ERROR: failures with IDs
+- Never log PII
+
+---
+
+## 7. Script Rules (One-off / Migration Scripts)
+- Must support **dry-run by default**
+- Must be idempotent
+- Must log:
+  - total records found
+  - total updated
+  - skipped records
+
+---
+
+## 8. Environment Handling
+- No hardcoded environment names
+- Accept env at runtime:
+  - local / dev / stage / prod
+- Environment name == DB name
+
+---
+
+## 9. Error Handling
+- Fail loudly but safely
+- Catch and log exceptions with identifiers
+- Never swallow exceptions silently
+
+---
+
+## 10. Performance Expectations
+- Avoid loading entire tables into memory
+- Use batching / iterators
+- Avoid serializer misuse in loops
+
+---
+
+## 11. Sentry & Monitoring
+- Assume Sentry is active
+- Fix:
+  - N+1 queries
+  - slow spans
+  - repeated updates
+- Any Sentry fix must include explanation
+
+---
+
+## 12. Documentation & Commit Rules (Mandatory)
+Every backend change must include:
+- Inline code comments (why, not what)
+- Documentation update if behavior changes
+- Commit message
+
+### Commit Message Format
+- feat(backend): short meaningful description
+- fix(backend): issue resolved
+- refactor(backend): code cleanup
+- perf(backend): query or runtime optimization
+- chore(backend): tooling or infra
+
+
+---
+
+## 13. AI Interaction Rule
+AI output must:
+- Explain query changes
+- Highlight performance impact
+- Mention backward compatibility
+- Be safe for production usage

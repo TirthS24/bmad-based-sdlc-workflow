@@ -1,0 +1,17 @@
+{
+  "keep": [
+    "bmad-project-context",
+    "bmad-spec",
+    "bmad-review",
+    "bmad-code-review",
+    "bmad-advanced-elicitation",
+    "bmad-testarch-test-design",
+    "bmad-testarch-atdd",
+    "bmad-testarch-test-review",
+    "bmad-testarch-trace",
+    "bmad-testarch-nfr",
+    "bmad-testarch-framework",
+    "bmad-deep-recon",
+    "bmad-walkthrough"
+  ]
+}

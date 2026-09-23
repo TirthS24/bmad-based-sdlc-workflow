@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      { "command": "node .agent-workflow/wf.mjs status --hook", "timeout": 5 }
+    ],
+    "preToolUse": [
+      {
+        "command": "node .agent-workflow/wf.mjs guard preToolUse",
+        "matcher": "Write|MultiEdit|Edit",
+        "failClosed": true,
+        "timeout": 10
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "node .agent-workflow/wf.mjs guard beforeShellExecution",
+        "failClosed": true,
+        "timeout": 10
+      }
+    ],
+    "afterFileEdit": [
+      { "command": "node .agent-workflow/wf.mjs log afterFileEdit", "timeout": 5 }
+    ],
+    "stop": [
+      {
+        "command": "node .agent-workflow/wf.mjs guard stop",
+        "loop_limit": 5,
+        "timeout": 120
+      }
+    ]
+  }
+}
