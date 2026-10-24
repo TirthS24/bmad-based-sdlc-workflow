@@ -42,7 +42,7 @@ test('every hooks.json command answers exactly as pinned', (t) => {
 
   const sh = (command) => fire(repo, hooks.beforeShellExecution, { command });
   assert.deepEqual(sh('ls'), { status: 0, stdout: allowOut, stderr: '' });
-  assert.deepEqual(sh('git commit -m x'), { status: 2, stdout: denyOut('blocked until Gate 2 is approved: git commit -m x'), stderr: '' });
+  assert.deepEqual(sh('git commit -m x'), { status: 2, stdout: denyOut('blocked until the final gate is approved: git commit -m x'), stderr: '' });
 
   assert.deepEqual(fire(repo, hooks.afterFileEdit, { tool_name: 'Write', file_path: 'specs/x.md' }), { status: 0, stdout: '{}\n', stderr: '' });
   assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'afterFileEdit', tool: 'Write', path: 'specs/x.md' });

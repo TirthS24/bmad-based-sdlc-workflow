@@ -13,8 +13,18 @@ test('run creates state, spec dir, run dir and a run event', (t) => {
   assert.match(s.run.id, /^\d{8}-my-feature$/);
   assert.equal(s.current.stage, 'grill_spec');
   assert.equal(s.current.attempt, 1);
-  assert.equal(s.gates.gate1.status, 'pending');
-  assert.equal(s.gates.gate2.status, 'pending');
+  assert.deepEqual(s.gates, {
+    gate_spec: { status: 'pending' },
+    gate_approach: { status: 'pending' },
+    gate_plan: { status: 'pending' },
+    gate_tests: { status: 'pending' },
+    gate_review: { status: 'pending' },
+    gate_final: { status: 'pending' },
+  });
+  assert.deepEqual(s.rejections, []);
+  assert.equal(s.run.branch, `wf/${s.run.id}`);
+  assert.match(s.run.base_branch, /^(main|master)$/);
+  assert.equal(repo.git('rev-parse', '--abbrev-ref', 'HEAD').stdout.trim(), s.run.branch);
   assert.deepEqual(s.loops, {
     implement: { round: 0, last_failing: [] },
     review: { round: 0 },
@@ -62,11 +72,10 @@ test('status prints run, branch, stage, gates, loop, writes and next_action', (t
   const { repo, id } = withRun(t);
   const out = repo.run(['status']).stdout;
   assert.ok(out.includes(`run: ${id}`));
-  assert.match(out, /^branch: \S+$/m);
+  assert.ok(out.includes(`branch: wf/${id}`));
   assert.match(out, /^stage: grill_spec$/m);
   assert.match(out, /^attempt: 1$/m);
-  assert.match(out, /^gate1: pending$/m);
-  assert.match(out, /^gate2: pending$/m);
+  assert.match(out, /^gates: spec=pending approach=pending plan=pending tests=pending review=pending final=pending$/m);
   assert.match(out, /^loop: 0$/m);
   assert.match(out, /^writes: allowed: specs\/\*\* \/ blocked: protected$/m);
   assert.match(out, /^next_action: /m);
@@ -186,7 +195,7 @@ test('CLI usage and unknown commands', (t) => {
   const repo = fresh(t);
   const none = repo.run([]);
   assert.equal(none.status, 1);
-  assert.match(none.stdout, /^usage: wf\.mjs <run\|status\|done\|approve\|verify\|guard\|log\|prune\|abort\|pause\|resume> \[args\]$/m);
+  assert.match(none.stdout, /^usage: wf\.mjs <run\|status\|done\|approve\|reject\|pr\|verify\|guard\|log\|prune\|abort\|pause\|resume> \[args\]$/m);
   assert.equal(repo.run(['help']).status, 0);
   assert.equal(repo.run(['--help']).status, 0);
   const bad = repo.run(['frobnicate']);

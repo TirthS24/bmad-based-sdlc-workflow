@@ -17,7 +17,7 @@ Dispatch `implementer` for **one** attempt. Do not loop in this skill. The `stop
 
 ## Inputs
 
-- Approved Gate 1 approach letter from `wf status`
+- Approved approach letter from `wf status` (`approach:` line, set at `gate_approach`)
 - Frozen tests (read-only)
 
 ## Outputs

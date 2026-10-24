@@ -114,6 +114,22 @@ export function makeRepo() {
       repo.file(`specs/spec-${id}/approach.md`, VALID_APPROACH);
       repo.file(`specs/spec-${id}/test-plan.md`, VALID_TEST_PLAN);
     },
+    // A local bare repo as `origin`, and a fake `gh` on PATH that records its arguments.
+    addRemoteAndFakeGh({ ghExit = 0, ghOut = 'https://github.com/acme/app/pull/7' } = {}) {
+      const remote = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-remote-'));
+      spawnSync('git', ['init', '--bare', '-q', remote]);
+      git('remote', 'add', 'origin', remote);
+      const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-bin-'));
+      const log = path.join(bin, 'gh.log');
+      fs.writeFileSync(path.join(bin, 'gh'), `#!/bin/sh\nprintf '%s\\n' "$@" > "${log}"\necho "${ghOut}"\nexit ${ghExit}\n`, { mode: 0o755 });
+      env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+      return {
+        remote,
+        ghArgs: () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : null),
+        remoteBranches: () => spawnSync('git', ['--git-dir', remote, 'branch', '--list'], { encoding: 'utf8' }).stdout,
+        cleanup: () => { fs.rmSync(remote, { recursive: true, force: true }); fs.rmSync(bin, { recursive: true, force: true }); },
+      };
+    },
     cleanup() {
       fs.rmSync(root, { recursive: true, force: true });
     },

@@ -27,9 +27,9 @@ export function globToRegExp(glob) {
 export function expandWritePatterns(patterns, config) {
   const out = [];
   for (const p of patterns) {
-    if (p === '<test_globs>' || p === '!<test_globs>') {
-      const neg = p.startsWith('!');
-      for (const g of config.test_globs || []) out.push(neg ? `!${g}` : g);
+    const token = /^(!?)<(test_globs|src_globs)>$/.exec(p);
+    if (token) {
+      for (const g of config[token[2]] || []) out.push(`${token[1]}${g}`);
     } else {
       out.push(p);
     }

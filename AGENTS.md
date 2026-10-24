@@ -5,7 +5,7 @@ in a task-shaped request, run: `node .agent-workflow/wf.mjs status`
 
 - If a run is **active**, follow its `next_action` exactly. Don't skip
   stages, edit `.agent-workflow/state.json` directly, or run `git commit`
-  / `git push` to `refs/for/` before Gate 2 is recorded — these are
+  / `git push` / `gh pr create` before the final gate (`gate_final`) is approved — these are
   enforced by hooks and will be blocked.
 - If **no run is active** and the request is a new feature or bug fix,
   start one: `/wf-run <ticket-id-or-description>`.

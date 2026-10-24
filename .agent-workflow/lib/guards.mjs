@@ -13,8 +13,8 @@ function isProtected(rel, workflow) {
   return (workflow.protected_files || []).some((p) => posixRel(p) === rel || p === rel);
 }
 
-function gate2Approved(state) {
-  return state?.gates?.gate2?.status === 'approved';
+function finalApproved(state) {
+  return state?.gates?.gate_final?.status === 'approved';
 }
 
 function commandIsGuarded(command, workflow) {
@@ -49,8 +49,8 @@ export function guardPreToolUse(input, state, workflow, config) {
 export function guardShell(input, state, workflow) {
   if (!state?.run?.id) return allow();
   if (!commandIsGuarded(input.command, workflow)) return allow();
-  if (gate2Approved(state)) return allow();
-  return deny(`blocked until Gate 2 is approved: ${input.command}`);
+  if (finalApproved(state)) return allow();
+  return deny(`blocked until the final gate is approved: ${input.command}`);
 }
 
 function failingNamesFromVerify() {

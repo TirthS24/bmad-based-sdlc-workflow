@@ -1,20 +1,24 @@
 {
-  "schema": 1,
+  "schema": 2,
   "stages": [
-    { "id": "grill_spec", "executor": "main", "writes": ["specs/**"], "next": "feasibility" },
-    { "id": "feasibility", "executor": "agent:feasibility-analyst", "writes": ["specs/**"], "next": "test_plan" },
-    { "id": "test_plan", "executor": "agent:test-architect", "writes": ["specs/**"], "next": "gate1" },
-    { "id": "gate1", "executor": "human", "writes": [], "next": "tests" },
-    { "id": "tests", "executor": "agent:test-architect", "writes": ["<test_globs>"], "next": "implement" },
-    { "id": "implement", "executor": "agent:implementer", "writes": ["src/**", "!<test_globs>"], "max_attempts": 5, "next": "review" },
-    { "id": "review", "executor": "main+bmad-code-review", "writes": ["src/**", "!<test_globs>"], "max_rounds": 3, "next": "verify" },
-    { "id": "verify", "executor": "agent:verifier", "writes": [], "max_fix_rounds": 2, "next": "gate2" },
-    { "id": "gate2", "executor": "human", "writes": [], "next": "pr" },
+    { "id": "grill_spec", "executor": "main", "writes": ["specs/**"], "next": "gate_spec" },
+    { "id": "gate_spec", "executor": "human", "writes": [], "next": "feasibility" },
+    { "id": "feasibility", "executor": "agent:feasibility-analyst", "writes": ["specs/**"], "next": "gate_approach" },
+    { "id": "gate_approach", "executor": "human", "writes": [], "next": "test_plan" },
+    { "id": "test_plan", "executor": "agent:test-architect", "writes": ["specs/**"], "next": "gate_plan" },
+    { "id": "gate_plan", "executor": "human", "writes": [], "next": "tests" },
+    { "id": "tests", "executor": "agent:test-architect", "writes": ["<test_globs>"], "next": "gate_tests" },
+    { "id": "gate_tests", "executor": "human", "writes": [], "next": "implement" },
+    { "id": "implement", "executor": "agent:implementer", "writes": ["<src_globs>", "!<test_globs>"], "max_attempts": 5, "next": "review" },
+    { "id": "review", "executor": "main+bmad-code-review", "writes": ["<src_globs>", "!<test_globs>"], "max_rounds": 3, "next": "gate_review" },
+    { "id": "gate_review", "executor": "human", "writes": [], "on_reject": "implement", "next": "verify" },
+    { "id": "verify", "executor": "agent:verifier", "writes": [], "max_fix_rounds": 2, "next": "gate_final" },
+    { "id": "gate_final", "executor": "human", "writes": [], "next": "pr" },
     { "id": "pr", "executor": "main", "writes": [], "next": "done" }
   ],
   "guarded_shell_patterns": [
     "^git\\s+commit",
-    "refs/for/",
+    "^git\\s+push",
     "^gh\\s+pr\\s+create"
   ],
   "protected_files": [

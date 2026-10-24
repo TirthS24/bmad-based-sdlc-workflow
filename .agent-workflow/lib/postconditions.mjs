@@ -105,8 +105,12 @@ export function checkReviewToVerify(resultPath) {
   return null;
 }
 
-export function checkVerifyToGate2(state, resultPath) {
+// The tier results of the last verify check, so `done verify` can record them for the PR body.
+export const lastVerify = { tiers: [] };
+
+export function checkVerifyToGate(state, resultPath) {
   const results = runVerifyTiers(['unit', 'lint', 'complexity', 'e2e', 'a11y']);
+  lastVerify.tiers = results.map(({ tier, skipped, code }) => ({ tier, skipped, code }));
   const failed = results.find((r) => !r.skipped && r.code !== 0);
   if (failed) return `${failed.tier} failed (exit ${failed.code})`;
   const evidence = resultPath
@@ -127,9 +131,14 @@ export function commitsSince(baseline) {
   return parseInt((res.stdout || '0').trim(), 10);
 }
 
-export function checkPrToDone(state) {
+export const PR_URL = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+$/;
+
+export function checkPrToDone(state, resultPath) {
+  if (!PR_URL.test(resultPath || '')) {
+    return 'pr result must be the GitHub PR URL (https://github.com/<owner>/<repo>/pull/<n>)';
+  }
   const n = commitsSince(state.run.baseline_sha);
-  if (n !== 1) return `expected exactly 1 commit since ${state.run.baseline_sha}, found ${n}`;
+  if (n < 1) return `expected at least 1 commit since ${state.run.baseline_sha}, found ${n}`;
   return null;
 }
 
@@ -148,9 +157,9 @@ export function postcondition(fromStage, state, resultPath) {
     case 'review':
       return checkReviewToVerify(resultPath);
     case 'verify':
-      return checkVerifyToGate2(state, resultPath);
+      return checkVerifyToGate(state, resultPath);
     case 'pr':
-      return checkPrToDone(state);
+      return checkPrToDone(state, resultPath);
     default:
       return `no postcondition for ${fromStage}`;
   }

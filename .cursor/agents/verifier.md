@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Runs the exploratory browser or API pass and assembles the Gate 2 evidence bundle. Use only via wf-verify.
+description: Runs the exploratory browser or API pass and assembles the `gate_final` evidence bundle. Use only via wf-verify.
 model: inherit
 ---
 

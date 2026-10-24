@@ -40,10 +40,10 @@ Four axes. Tag each finding `low` / `medium` / `high` / `decision-needed`.
 
 - Standards: [.cursor/rules/](../.cursor/rules/) (`backend-rules-md.mdc`, `frontend-rules-md.mdc`)
 - Spec conformance: SPEC.md `REQ-n` capabilities
-- Approach conformance: the Gate 1 approved option in approach.md only
+- Approach conformance: the option approved at `gate_approach` in approach.md only
 - Test quality: frozen tests still name `REQ` / `TECH` ids; no silent deletes of failing cases
 
-`high` and `decision-needed` block `review` → `verify`. `decision-needed` is copied into the Gate 2 report.
+`high` and `decision-needed` block `review` → `verify`. `decision-needed` is copied into the `gate_review` report.
 
 ## Coding rules
 

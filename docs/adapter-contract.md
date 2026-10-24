@@ -58,7 +58,7 @@ Skills, not hooks, call `wf.mjs done <stage> --result <path>` to finish a stage 
 1. A write outside the current stage's allowed paths is denied.
 2. Frozen test globs are denied during `implement` and `review`.
 3. Protected workflow files are always denied.
-4. `git commit`, pushes to `refs/for/` and `gh pr create` are denied until Gate 2 is approved.
+4. `git commit`, `git push` and `gh pr create` are denied until `gate_final` is approved.
 5. The implement retry loop runs through `stop` and ends at the round cap or on a repeated failing set.
 6. Every hook calls one of the entry points above with the payload on stdin; nothing else reads or writes `state.json`.
 

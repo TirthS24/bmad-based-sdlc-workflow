@@ -20,7 +20,7 @@ Run **bmad-code-review from this main thread** (it spawns its own reviewers; nes
 - Also pass approach.md as claims/context
 - Do not use `gh pr view`
 
-If the `bmad-testarch-test-review` skill is installed under `.agents/skills/` or `.cursor/skills/`, call it after the code review. Findings tagged `decision-needed` go into the Gate 2 report, not a human interrupt now.
+If the `bmad-testarch-test-review` skill is installed under `.agents/skills/` or `.cursor/skills/`, call it after the code review. Findings tagged `decision-needed` go into the review gate (`gate_review`) report, not a human interrupt now.
 
 Write the combined review to `.agent-workflow/runs/<id>/review.md`. `high` / `decision-needed` still open block `wf done review`.
 

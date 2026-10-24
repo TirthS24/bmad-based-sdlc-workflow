@@ -50,7 +50,7 @@ test('preToolUse: review freezes tests too, verify and gates write nothing', (t)
   repo.setStage('review');
   expectDeny(repo.guard('preToolUse', edit('tests/test_a.py')), /frozen tests: tests\/test_a\.py is in test_globs for stage review/);
   expectAllow(repo.guard('preToolUse', edit('src/app.py')));
-  for (const stage of ['verify', 'gate1', 'gate2', 'pr']) {
+  for (const stage of ['verify', 'gate_spec', 'gate_final', 'pr']) {
     repo.setStage(stage);
     expectDeny(repo.guard('preToolUse', edit('src/app.py')), new RegExp(`stage ${stage} cannot write src/app\\.py\\. Allowed: \\(none\\)`));
   }
@@ -92,21 +92,21 @@ test('guard: unknown events and empty payloads answer {}', (t) => {
   assert.equal(repo.run(['guard', 'preToolUse'], { input: 'not json' }).status, 0);
 });
 
-test('beforeShellExecution: commit, Gerrit push and PR creation wait for Gate 2', (t) => {
+test('beforeShellExecution: commit, push and PR creation wait for the final gate', (t) => {
   const { repo } = withRun(t);
-  for (const command of ['git commit -m x', '  git   commit -am y', 'git push gerrit HEAD:refs/for/main', 'gh pr create --fill']) {
-    expectDeny(repo.guard('beforeShellExecution', { command }), /blocked until Gate 2 is approved: /);
+  for (const command of ['git commit -m x', '  git   commit -am y', 'git push origin HEAD', 'git push -u origin wf/x', 'gh pr create --fill']) {
+    expectDeny(repo.guard('beforeShellExecution', { command }), /blocked until the final gate is approved: /);
   }
-  for (const command of ['git status', 'git push origin main', 'ls', 'echo git commit', '']) {
+  for (const command of ['git status', 'git pull', 'ls', 'echo git commit', '']) {
     expectAllow(repo.guard('beforeShellExecution', { command }));
   }
-  expectDeny(repo.guard('beforeShellExecution', { tool_input: { command: 'git commit -m x' } }), /blocked until Gate 2/);
-  expectDeny(repo.guard('beforeShellExecution', { command_line: 'git commit -m x' }), /blocked until Gate 2/);
+  expectDeny(repo.guard('beforeShellExecution', { tool_input: { command: 'git commit -m x' } }), /blocked until the final gate/);
+  expectDeny(repo.guard('beforeShellExecution', { command_line: 'git commit -m x' }), /blocked until the final gate/);
 });
 
-test('beforeShellExecution: allowed after Gate 2, and when no run is active', (t) => {
+test('beforeShellExecution: allowed after the final gate, and when no run is active', (t) => {
   const { repo } = withRun(t);
-  repo.update((s) => { s.gates.gate2.status = 'approved'; });
+  repo.update((s) => { s.gates.gate_final.status = 'approved'; });
   expectAllow(repo.guard('beforeShellExecution', { command: 'git commit -m x' }));
   repo.run(['abort']);
   expectAllow(repo.guard('beforeShellExecution', { command: 'git commit -m x' }));

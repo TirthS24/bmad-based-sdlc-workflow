@@ -14,8 +14,8 @@ test('done needs an active run, the current stage, and a non-human stage', (t) =
   const { repo } = withRun(t);
   fails(repo.run(['done', 'feasibility']), /current stage is grill_spec, not feasibility/);
   fails(repo.run(['done', 'bogus']), /current stage is grill_spec, not bogus/);
-  repo.setStage('gate1');
-  fails(repo.run(['done', 'gate1']), /human gates use wf approve, not wf done/);
+  repo.setStage('gate_spec');
+  fails(repo.run(['done', 'gate_spec']), /human gates use wf approve, not wf done/);
   repo.setStage('nonexistent');
   fails(repo.run(['done', 'nonexistent']), /unknown stage nonexistent/);
   repo.run(['abort']);
@@ -36,13 +36,13 @@ test('grill_spec: needs SPEC.md, no open questions, REQ ids and success lines', 
   const ok = repo.run(['done', 'grill_spec', '--result', spec]);
   assert.equal(ok.status, 0, ok.stderr);
   const s = repo.state();
-  assert.equal(s.current.stage, 'feasibility');
+  assert.equal(s.current.stage, 'gate_spec');
   assert.equal(s.current.attempt, 1);
   assert.equal(s.stages.grill_spec.status, 'done');
   assert.equal(s.stages.grill_spec.result, spec);
   assert.ok(s.stages.grill_spec.finished_at);
-  assert.match(s.current.next_action, /^Run \/wf-feasibility/);
-  assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'done', stage: 'grill_spec', next: 'feasibility', result: spec });
+  assert.match(s.current.next_action, /^Human: review SPEC\.md/);
+  assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'done', stage: 'grill_spec', next: 'gate_spec', result: spec });
 });
 
 test('grill_spec: every REQ needs its own success line', (t) => {
@@ -64,7 +64,7 @@ test('feasibility: verdict, two approaches, single-commit line', (t) => {
   fails(repo.run(['done', 'feasibility']), /approach\.md needs a single-commit-fit line/);
   repo.file(p, VALID_APPROACH);
   assert.equal(repo.run(['done', 'feasibility', '--result', p]).status, 0);
-  assert.equal(repo.state().current.stage, 'test_plan');
+  assert.equal(repo.state().current.stage, 'gate_approach');
 });
 
 test('feasibility: two named approaches count even without headings', (t) => {
@@ -91,8 +91,8 @@ test('test_plan: covers every REQ and tags every scenario', (t) => {
   fails(repo.run(['done', 'test_plan']), /scenario missing automated\/manual\/N\/A tag: - PRD-1\.1 happy path \(e2e\)/);
   repo.file(`${dir}/test-plan.md`, VALID_TEST_PLAN);
   assert.equal(repo.run(['done', 'test_plan']).status, 0);
-  assert.equal(repo.state().current.stage, 'gate1');
-  assert.match(repo.state().current.next_action, /^Human: choose approach A\|B\|C/);
+  assert.equal(repo.state().current.stage, 'gate_plan');
+  assert.match(repo.state().current.next_action, /^Human: review test-plan\.md/);
 });
 
 test('test_plan: TECH scenarios are checked too', (t) => {
@@ -114,7 +114,7 @@ test('tests: new tests must fail and cite an id, then the freeze hash is stored'
   repo.file('tests/test_a.py', 'A');
   assert.equal(repo.run(['done', 'tests', '--result', 'tests']).status, 0);
   const s = repo.state();
-  assert.equal(s.current.stage, 'implement');
+  assert.equal(s.current.stage, 'gate_tests');
   assert.match(s.freeze.test_files_hash, /^[0-9a-f]{64}$/);
 });
 
@@ -167,7 +167,7 @@ test('review: open high / decision-needed findings block verify', (t) => {
   fails(repo.run(['done', 'review', '--result', 'review.md']), /review still has open high/);
   repo.file('review.md', '- [medium] rename helper\nopen: 0\n');
   assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0);
-  assert.equal(repo.state().current.stage, 'verify');
+  assert.equal(repo.state().current.stage, 'gate_review');
 });
 
 test('review: "no findings tagged", or any of resolved / fixed / closed, lets the stage through', (t) => {
@@ -196,8 +196,11 @@ test('verify: runs every tier and needs a non-empty evidence bundle', (t) => {
   fails(repo.run(['done', 'verify']), /evidence directory is empty/);
   fs.writeFileSync(path.join(evidence, 'shot.png'), 'x');
   assert.equal(repo.run(['done', 'verify']).status, 0);
-  assert.equal(repo.state().current.stage, 'gate2');
-  assert.match(repo.state().current.next_action, /^Human: \/wf-approve-manual/);
+  assert.equal(repo.state().current.stage, 'gate_final');
+  assert.match(repo.state().current.next_action, /^Human: read the evidence bundle/);
+  assert.deepEqual(repo.state().stages.verify.tiers.map((t) => [t.tier, t.skipped, t.code]), [
+    ['unit', false, 0], ['lint', false, 0], ['complexity', true, 0], ['e2e', true, 0], ['a11y', true, 0],
+  ]);
 });
 
 test('verify: an explicit --result path overrides the default evidence dir', (t) => {
@@ -208,15 +211,18 @@ test('verify: an explicit --result path overrides the default evidence dir', (t)
   assert.equal(repo.run(['done', 'verify', '--result', 'out/evidence.txt']).status, 0);
 });
 
-test('pr: exactly one commit since the baseline, then the run is done', (t) => {
+const PR_URL = 'https://github.com/acme/app/pull/12';
+
+test('pr: result must be a GitHub PR URL and there must be a commit since the baseline', (t) => {
   const { repo } = withRun(t);
   repo.setStage('pr');
-  fails(repo.run(['done', 'pr']), /expected exactly 1 commit since [0-9a-f]{40}, found 0/);
+  fails(repo.run(['done', 'pr']), /pr result must be the GitHub PR URL/);
+  fails(repo.run(['done', 'pr', '--result', 'abc123']), /pr result must be the GitHub PR URL/);
+  fails(repo.run(['done', 'pr', '--result', 'https://gerrit.example.com/c/1']), /pr result must be the GitHub PR URL/);
+  fails(repo.run(['done', 'pr', '--result', PR_URL]), /expected at least 1 commit since [0-9a-f]{40}, found 0/);
   repo.commit('one');
   repo.commit('two');
-  fails(repo.run(['done', 'pr']), /found 2/);
-  repo.update((s) => { s.run.baseline_sha = repo.git('rev-parse', 'HEAD~1').stdout.trim(); });
-  assert.equal(repo.run(['done', 'pr']).status, 0);
+  assert.equal(repo.run(['done', 'pr', '--result', PR_URL]).status, 0);
   const s = repo.state();
   assert.equal(s.current.stage, 'done');
   assert.equal(s.current.next_action, 'Run complete. No further pipeline action.');
@@ -226,7 +232,7 @@ test('pr: an unknown baseline counts as -1 commits', (t) => {
   const { repo } = withRun(t);
   repo.setStage('pr');
   repo.update((s) => { s.run.baseline_sha = 'deadbeef'; });
-  fails(repo.run(['done', 'pr']), /found -1/);
+  fails(repo.run(['done', 'pr', '--result', PR_URL]), /found -1/);
 });
 
 test('stage order matches workflow.json', (t) => {
@@ -234,10 +240,16 @@ test('stage order matches workflow.json', (t) => {
   const wf = JSON.parse(fs.readFileSync(path.join(repo.wfDir, 'workflow.json'), 'utf8'));
   assert.deepEqual(
     wf.stages.map((s) => s.id),
-    ['grill_spec', 'feasibility', 'test_plan', 'gate1', 'tests', 'implement', 'review', 'verify', 'gate2', 'pr'],
+    [
+      'grill_spec', 'gate_spec', 'feasibility', 'gate_approach', 'test_plan', 'gate_plan', 'tests', 'gate_tests',
+      'implement', 'review', 'gate_review', 'verify', 'gate_final', 'pr',
+    ],
   );
   assert.deepEqual(
     wf.stages.filter((s) => s.executor === 'human').map((s) => s.id),
-    ['gate1', 'gate2'],
+    ['gate_spec', 'gate_approach', 'gate_plan', 'gate_tests', 'gate_review', 'gate_final'],
   );
+  // implementation is the only working stage whose exit has no human gate
+  const ids = wf.stages.map((x) => x.id);
+  assert.equal(wf.stages[ids.indexOf('implement') + 1].id, 'review');
 });

@@ -5,6 +5,9 @@
     "**/*.test.js",
     "E2E/tests/**/*.spec.ts"
   ],
+  "src_globs": [
+    "src/**"
+  ],
   "commands": {
     "unit": "pytest",
     "lint": "yarn lint",
@@ -12,7 +15,10 @@
     "e2e": "",
     "a11y": ""
   },
-  "surfaces": ["ui", "api"],
+  "surfaces": [
+    "ui",
+    "api"
+  ],
   "dev_url": "http://localhost:3000",
   "loop_caps": {
     "implement": 5,

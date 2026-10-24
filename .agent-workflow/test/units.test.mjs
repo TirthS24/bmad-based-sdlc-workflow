@@ -68,7 +68,8 @@ test('fillAction fills <id> and has text for every stage', () => {
   assert.match(fillAction('grill_spec', 'r1'), /specs\/spec-r1\/SPEC\.md/);
   assert.equal(fillAction('nope', 'r1'), '');
   assert.deepEqual(Object.keys(NEXT_ACTION), [
-    'grill_spec', 'feasibility', 'test_plan', 'gate1', 'tests', 'implement', 'review', 'verify', 'gate2', 'pr', 'done',
+    'grill_spec', 'gate_spec', 'feasibility', 'gate_approach', 'test_plan', 'gate_plan', 'tests', 'gate_tests',
+    'implement', 'review', 'gate_review', 'verify', 'gate_final', 'pr', 'done',
   ]);
 });
 
@@ -78,11 +79,11 @@ test('formatStatus without a run', () => {
 
 test('guardShell: decisions for guarded and free commands', () => {
   const workflow = { guarded_shell_patterns: ['^git\\s+commit', 'refs/for/'] };
-  const run = { run: { id: 'r' }, gates: { gate2: { status: 'pending' } } };
-  assert.deepEqual(guardShell({ command: 'git commit -m x' }, run, workflow), { permission: 'deny', message: 'blocked until Gate 2 is approved: git commit -m x' });
+  const run = { run: { id: 'r' }, gates: { gate_final: { status: 'pending' } } };
+  assert.deepEqual(guardShell({ command: 'git commit -m x' }, run, workflow), { permission: 'deny', message: 'blocked until the final gate is approved: git commit -m x' });
   assert.deepEqual(guardShell({ command: 'ls' }, run, workflow), { permission: 'allow' });
   assert.deepEqual(guardShell({ command: 'git commit' }, null, workflow), { permission: 'allow' });
-  const approved = { run: { id: 'r' }, gates: { gate2: { status: 'approved' } } };
+  const approved = { run: { id: 'r' }, gates: { gate_final: { status: 'approved' } } };
   assert.deepEqual(guardShell({ command: 'git commit' }, approved, workflow), { permission: 'allow' });
 });
 
