@@ -1,0 +1,9 @@
+{
+  "name": "bmad-based-sdlc-workflow",
+  "private": true,
+  "description": "Spec-driven agentic workflow. Not an application; this file only runs the workflow's own tests.",
+  "engines": { "node": ">=20.12" },
+  "scripts": {
+    "test": "node --test .agent-workflow/test/*.test.mjs"
+  }
+}

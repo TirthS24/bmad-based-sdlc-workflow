@@ -72,6 +72,18 @@ Defined in `.cursor/agents/`. Invoke them only from the matching `wf-*` skill.
 - `implementer` — makes the frozen tests pass. Does not edit test globs.
 - `verifier` — exploratory pass in the editor browser, then the evidence bundle.
 
+## Development
+
+`wf.mjs` only parses arguments. Logic lives in `.agent-workflow/lib/`, and harness-specific hook handling lives in `.agent-workflow/adapters/` (contract: `docs/adapter-contract.md`). Requirements and the roadmap are in `docs/REQUIREMENTS.md` and `docs/IMPLEMENTATION_PLAN.md`.
+
+```bash
+npm test    # node --test .agent-workflow/test/*.test.mjs
+```
+
+- Tests run `wf.mjs` against a throwaway git repo (`WF_DIR` and `REPO_ROOT` point at it), so they never touch the real `state.json`, `events.jsonl` or `runs/`.
+- To pin new behaviour, add a case to the matching file in `.agent-workflow/test/` using `withRun(t)` from `helpers.mjs`.
+- Don't work on the workflow's own files while a `wf` run is active: the write guard will block you.
+
 ## What stays out of git
 
 `.agent-workflow/state.json`, `events.jsonl`, and `runs/` are local. So are `_bmad/**/*.user.toml` and `.DS_Store`. Specs, approach, test plan, tests, and product code are committed by `/wf-pr` after Gate 2.
