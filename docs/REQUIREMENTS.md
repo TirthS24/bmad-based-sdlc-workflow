@@ -9,14 +9,26 @@ Numbered so tests, plans and PRs can cite them. Each row names the phase in `IMP
 | R-1 | A main agent orchestrates specialised subagents from requirement to PR | 1, 7 | partial (Cursor skills) |
 | R-2 | Requirement interview produces `SPEC.md` with numbered `REQ-n` capabilities | 1 | met |
 | R-3 | Architecture and engineering review of the spec produces `approach.md` with key decisions | 1 | partial (feasibility framing) |
-| R-4 | A human approves at every stage exit except implementation | 1 | 2 of 6 exits |
-| R-5 | Rejecting a gate is a recorded outcome that returns to the prior stage | 1 | missing |
+| R-4 | A human approves at every stage exit except implementation | 1 | met (6 gates) |
+| R-5 | Rejecting a gate is a recorded outcome that returns to the prior stage | 1 | met (`wf reject`) |
 | R-6 | Product/flow tests are written as Playwright scripts after planning and frozen before implementation | 2 | partial (one frozen set) |
 | R-7 | Unit tests are written by the implementer and are not frozen | 2 | missing |
 | R-8 | Implementation retries are capped, stop on a stuck loop, and are not gated | 1 | met |
 | R-9 | Code review followed by another test round | 1, 2 | partial |
 | R-10 | An automated E2E run of the frozen scripts precedes the PR | 2 | missing |
-| R-11 | Delivery is a GitHub PR (summary, acceptance checklist, test results, risk note); no Gerrit | 1 | missing |
+| R-11 | Delivery is a GitHub PR (summary, acceptance checklist, test results, risk note); no Gerrit | 1 | met (`wf pr`; acceptance boxes are left for the reviewer to tick) |
+
+## Stage capabilities
+
+| ID | Requirement | Phase | Today |
+|---|---|---|---|
+| R-24 | Every stage has a named skill or agent, listed in a capability manifest that `wf doctor` validates | 1B | missing |
+| R-25 | Optional, sourced research (market, competitor, domain, user-voice, technical) can feed the spec and the architecture decision | 1B | missing |
+| R-26 | Architecture review records decisions with trade-offs, non-functional needs, risks and rollback | 1B | partial |
+| R-27 | Code review runs in a fresh context and cannot edit code | 1B | missing |
+| R-28 | The human can choose retry, reject or abort when a loop escalates | 1B | missing |
+| R-29 | A short gate brief is available at every gate | 1B | missing |
+| R-30 | Stack rule packs are chosen per project, with a generic fallback | 1B, 7 | partial (Python, TypeScript) |
 
 ## Harness portability
 
