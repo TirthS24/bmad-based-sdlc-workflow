@@ -1,0 +1,15 @@
+{
+  "name": "wf-telemetry-server",
+  "private": true,
+  "type": "module",
+  "description": "Ingestion API, auth and admin dashboard for workflow telemetry. One deployable.",
+  "engines": { "node": ">=20.12" },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "bootstrap-admin": "node bin/bootstrap-admin.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:ui": "playwright test"
+  },
+  "dependencies": { "pg": "8.13.1" },
+  "devDependencies": { "@playwright/test": "1.49.1" }
+}
