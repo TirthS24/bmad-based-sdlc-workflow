@@ -60,7 +60,7 @@ test('gate_approach requires --approach A|B|C and stores it', (t) => {
   const res = repo.run(['approve', 'gate_approach', '--approach', 'C']);
   assert.equal(repo.state().gates.gate_approach.approach, 'C');
   assert.match(res.stdout, /^approach: C$/m);
-  assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'approve', gate: 'gate_approach', approach: 'C' });
+  assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'approve', gate: 'gate_approach', by: 'human', approach: 'C' });
 });
 
 test('other gates do not take an approach', (t) => {

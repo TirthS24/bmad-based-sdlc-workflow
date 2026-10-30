@@ -54,18 +54,19 @@ test('doctor: each profile validation rule is reported', (t) => {
 
 // ---- pm: tickets only; the run skips straight to gate_final -----------------------------------
 
-test('pm: after gate_spec the run skips to gate_final; gate_final rejects back to planning', (t) => {
+test('pm: after gate_spec the run skips to gate_final, which auto-passes when only specs changed', (t) => {
   const repo = startProfileRun(t, 'pm', 'docs only');
   repo.seedPlanning(repo.state().run.id);
   assertOk(repo.run(['done', 'planning']));
   assertOk(repo.run(['approve', 'gate_spec']));
   const s = repo.state();
-  assert.equal(s.current.stage, 'gate_final');
   assert.equal(s.stages.feasibility.status, 'skipped');
   assert.equal(s.gates.gate_approach.status, 'skipped');
   assert.match(repo.run(['status']).stdout, /^profile: pm$/m);
-  assertOk(repo.run(['reject', 'gate_final', '--reason', 'more tickets']));
-  assert.equal(repo.state().current.stage, 'planning');
+  // gate_final auto-passes: only specs changed, and the SRS and tickets match gate_spec.
+  assert.equal(s.current.stage, 'pr');
+  assert.equal(s.gates.gate_final.approved_by, 'auto');
+  assert.equal(s.gates.gate_final.condition, 'specs_only_unchanged');
 });
 
 test('pm: goto refuses a stage the profile skips', (t) => {
@@ -111,7 +112,9 @@ test('docs: implement writes docs only; review needs Standards and Spec conforma
 
   repo.file(runFile(repo, 'review.md'), '## Standards\n- open: 0\n## Spec conformance\n- open: 0\n');
   assertOk(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]));
-  assert.equal(repo.state().current.stage, 'gate_review');
+  // gate_review auto-passes: no open high or decision-needed findings.
+  assert.equal(repo.state().current.stage, 'verify');
+  assert.equal(repo.state().gates.gate_review.approved_by, 'auto');
 });
 
 test('docs: verify with blank tiers still passes and writes tiers.md saying so', (t) => {

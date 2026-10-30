@@ -7,7 +7,7 @@ import { profileOf } from './profiles.mjs';
 import { PATHS, REPO_ROOT, posixRel, specDir } from './paths.mjs';
 import { checkE2eCoverage, e2eNotConfigured, e2eSummary, readE2eReport } from './e2e.mjs';
 import { problem } from './problems.mjs';
-import { checkQuestions, checkTickets, srsSectionChecks } from './tickets.mjs';
+import { checkQuestions, checkTickets, plannedScenarios, srsSectionChecks } from './tickets.mjs';
 import { ALL_TIERS, combinedOutput, e2eReportPath, runVerifyTiers } from './verify.mjs';
 
 export function reqIds(specText) {
@@ -77,9 +77,16 @@ export function checkFeasibility(state) {
 // Failures that say nothing about the missing behaviour: the app or the browser never ran.
 const WRONG_RED = /ERR_CONNECTION_REFUSED|ECONNREFUSED|Executable doesn't exist|browserType\.launch|from config\.webServer/;
 
+// A bug fix can have nothing to run (no automated scenario and no test tier configured). That is
+// recorded as nothing_planned, which gate_tests reads; it is not a failure of the stage.
+export function nothingPlanned(state, cfg) {
+  return plannedScenarios(state).length === 0 && !String(cfg.commands?.e2e || '').trim() && !String(cfg.commands?.unit || '').trim();
+}
+
 // Product tests are red when the e2e command is set; otherwise fall back to the unit tier.
 export function checkTestsToImplement(state) {
   const cfg = loadConfig();
+  if (nothingPlanned(state, cfg)) return [];
   const missing = e2eNotConfigured(state, cfg);
   if (missing) return [problem('e2e command configured', missing, 'commands.e2e in config.json', 'npx playwright test --reporter=list,json')];
   const tier = String(cfg.commands?.e2e || '').trim() ? 'e2e' : 'unit';

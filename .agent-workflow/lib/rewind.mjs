@@ -10,7 +10,7 @@ export function rewind(state, workflow, target, end = null) {
   for (const id of ids.slice(from, to)) {
     if (state.stages[id]?.status === 'skipped' || state.gates[id]?.status === 'skipped') continue;
     delete state.stages[id];
-    if (state.gates[id]) state.gates[id] = { status: 'pending' };
+    if (state.gates[id]) state.gates[id] = { status: 'pending', human: true };
   }
   if (from <= ids.indexOf('tests')) state.freeze.test_files_hash = null;
   if (from <= ids.indexOf('implement')) {

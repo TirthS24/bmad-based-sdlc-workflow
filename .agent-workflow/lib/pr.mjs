@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { freezeHash } from './freeze.mjs';
 import { matchesAnyGlob, productGlobs, unitGlobs } from './globs.mjs';
-import { git, readText } from './io.mjs';
+import { git, loadWorkflow, readText } from './io.mjs';
 import { PATHS, posixRel, specDir } from './paths.mjs';
 import fs from 'node:fs';
 import { capabilityBlock, reqIds } from './postconditions.mjs';
@@ -87,6 +87,23 @@ function riskNote(state, config) {
   return lines;
 }
 
+// Every human gate and how it was passed: by you, auto-passed with its condition and reason, or
+// skipped by the profile. Profile changes are listed too (4a.8).
+function gatesSection(state) {
+  const rows = loadWorkflow().stages.filter((s) => s.executor === 'human').map((s) => {
+    const g = state.gates?.[s.id] || {};
+    const by = g.status === 'skipped' ? 'skipped (profile)' : g.status === 'approved' ? (g.approved_by || 'human') : (g.status || 'pending');
+    const why = g.condition ? `${g.condition}: ${g.reason}` : '';
+    return `| ${s.id} | ${by} | ${why} | ${g.approved_at || ''} |`;
+  });
+  const changes = (state.run.profile_changes || []).map((c) => `- profile changed ${c.from} → ${c.to} at ${c.at}`);
+  return [
+    '## Gates', '', `Profile: \`${state.run.profile || 'full'}\``, '',
+    '| Gate | Approved by | Condition / reason | Time |', '|---|---|---|---|', ...rows,
+    ...(changes.length ? ['', ...changes] : []), '',
+  ];
+}
+
 export function buildPrBody(state, config) {
   const approach = state.gates?.gate_approach?.approach;
   return [
@@ -112,6 +129,7 @@ export function buildPrBody(state, config) {
     '',
     ...testResults(state),
     '',
+    ...gatesSection(state),
     '## Risk note',
     '',
     ...riskNote(state, config),

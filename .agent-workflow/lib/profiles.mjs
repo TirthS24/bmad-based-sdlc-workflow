@@ -57,3 +57,11 @@ export function effectiveWrites(stageId, state, workflow, config) {
   const raw = profile.writes?.[stageId] ?? stageById(workflow, stageId)?.writes ?? [];
   return expandWritePatterns(raw, config, state.run?.id);
 }
+
+// The gate after fromId, without changing state (for previews).
+export function peekNextGate(fromId, state, workflow) {
+  const profile = profileOf(state, workflow);
+  let id = stageById(workflow, fromId).next;
+  while (skipsStage(profile, id)) id = stageById(workflow, id).next;
+  return id;
+}

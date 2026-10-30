@@ -5,7 +5,8 @@ import path from 'node:path';
 import { freezeHash } from './freeze.mjs';
 import { allowedScope, changedFiles, evaluate, scopeViolations } from './guards.mjs';
 import { matchesAnyGlob } from './globs.mjs';
-import { DEFAULT_PROFILE, nextStage, profileName, profileNames, profileOf, rejectTarget } from './profiles.mjs';
+import { DEFAULT_PROFILE, nextStage, peekNextGate, profileName, profileNames, profileOf, rejectTarget } from './profiles.mjs';
+import { advanceAfter, evaluateAuto } from './autopass.mjs';
 import {
   appendEvent, die, git, loadConfig, loadState, loadWorkflow, parseHookPayload,
   readJson, readStdin, readText, saveState, sha256File, stageById,
@@ -16,7 +17,7 @@ import { rewind } from './rewind.mjs';
 import { PATHS, REPO_ROOT, posixRel, specDir } from './paths.mjs';
 import { adrCommitted } from './adr.mjs';
 import { buildPrBody, decisionRecord, prSummaryPath, prTitle } from './pr.mjs';
-import { CHECKED_STAGES, commitsSince, lastVerify, postcondition } from './postconditions.mjs';
+import { CHECKED_STAGES, commitsSince, lastVerify, nothingPlanned, postcondition } from './postconditions.mjs';
 import { formatProblems, problem } from './problems.mjs';
 import {
   checkQuestions, checkTickets, escalationCount, srsSectionChecks, ticketsHash,
@@ -120,11 +121,11 @@ export function cmdDone(stage, resultPath) {
     result: resultPath || null,
     finished_at: new Date().toISOString(),
   };
+  if (stage === 'tests') state.stages.tests.check = nothingPlanned(state, loadConfig()) ? 'nothing_planned' : 'red_ok';
   if (stage === 'verify') state.stages.verify.tiers = lastVerify.tiers;
-  const next = nextStage(stage, state, workflow);
-  state.current.stage = next;
-  state.current.attempt = 1;
-  state.current.next_action = fillAction(next, state.run.id);
+  const notes = advanceAfter(stage, state, workflow, loadConfig());
+  const next = state.current.stage;
+  for (const n of notes) process.stdout.write(`${n}\n`);
   saveState(state);
   appendEvent('done', {
     stage,
@@ -152,6 +153,13 @@ export function cmdCheck(stage, resultPath) {
     process.exit(1);
   }
   process.stdout.write(`check ${target}: passed\n`);
+  // Preview only: would the next gate auto-pass if it were reached now? Nothing is recorded.
+  const workflow = loadWorkflow();
+  const gate = peekNextGate(target, state, workflow);
+  if (stageById(workflow, gate)?.executor === 'human' && profileOf(state, workflow).auto?.[gate]) {
+    const d = evaluateAuto(gate, state, workflow, loadConfig());
+    process.stdout.write(`next gate ${gate}: auto-pass ${d.passed ? 'would apply' : 'would not apply'} (${d.reason})\n`);
+  }
 }
 
 // `wf tickets check` is kept as an alias for planning's checks.
@@ -204,6 +212,7 @@ export function cmdApprove(gate, approach) {
   const dir = `specs/spec-${state.run.id}`;
   state.gates[gate] = {
     status: 'approved',
+    approved_by: 'human',
     approved_at: new Date().toISOString(),
     rejections: state.rejections.filter((r) => r.gate === gate).length,
     ...(gate === 'gate_approach' ? { approach } : {}),
@@ -211,12 +220,10 @@ export function cmdApprove(gate, approach) {
     approach_hash: fileHashIfExists(`${dir}/approach.md`),
     tickets_hash: ticketsHash(state),
   };
-  const next = nextStage(gate, state, workflow);
-  state.current.stage = next;
-  state.current.attempt = 1;
-  state.current.next_action = fillAction(next, state.run.id);
+  const notes = advanceAfter(gate, state, workflow, loadConfig());
   saveState(state);
-  appendEvent('approve', { gate, ...(gate === 'gate_approach' ? { approach } : {}) });
+  appendEvent('approve', { gate, by: 'human', ...(gate === 'gate_approach' ? { approach } : {}) });
+  for (const n of notes) process.stdout.write(`${n}\n`);
   process.stdout.write(`${formatStatus(state)}\n`);
 }
 

@@ -103,7 +103,9 @@ test('tests: a skipped unit tier counts as not failing', (t) => {
   const { repo } = withRun(t);
   repo.setStage('tests');
   repo.config({ commands: { unit: '' } });
-  fails(repo.run(['done', 'tests']), /new tests are red/);
+  // Nothing planned and no test tier: recorded as nothing_planned, not a failure (gate_tests reads it).
+  assertOk(repo.run(['done', 'tests']));
+  assert.equal(repo.state().stages.tests.check, 'nothing_planned');
 });
 
 test('freeze hash follows test_globs content only', (t) => {

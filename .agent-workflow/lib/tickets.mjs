@@ -255,12 +255,19 @@ export function escalationCount(state) {
   }
 }
 
+// external.jira_key is set when Jira issues are created after gate_spec; it is not a ticket change.
+function withoutJiraKey(data) {
+  if (!data?.external) return data;
+  const { jira_key: _jira, ...external } = data.external;
+  return { ...data, external };
+}
+
 export function ticketsHash(state) {
   const loaded = loadTickets(state);
   const parts = loaded
     .filter((t) => t.data)
     .sort((a, b) => posixRel(a.path).localeCompare(posixRel(b.path)))
-    .map((t) => `${posixRel(t.path)}\n${JSON.stringify(t.data)}`);
+    .map((t) => `${posixRel(t.path)}\n${JSON.stringify(withoutJiraKey(t.data))}`);
   if (!parts.length) return null;
   return createHash('sha256').update(parts.join('\n---\n')).digest('hex');
 }
