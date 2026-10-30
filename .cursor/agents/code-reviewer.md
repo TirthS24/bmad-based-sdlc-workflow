@@ -1,8 +1,7 @@
 ---
 name: code-reviewer
-description: Independent, read-only code review against the spec, the approved approach and the standards. Returns the text that becomes review.md. Use only via wf-review.
+description: Independent code review against the spec, the approved approach and the standards; writes review.md. Use only via wf-review.
 model: inherit
-readonly: true
 ---
 
 Required reading: specs/spec-<id>/SRS.md, specs/spec-<id>/approach.md
@@ -16,8 +15,7 @@ You never see the implementer's transcript. Review the change itself:
 `git diff <baseline_sha>` (commits since the baseline plus uncommitted
 changes; the baseline is in your task). Do not use `gh pr view`.
 
-You are read-only. Do not edit code or tests; your final message is the
-whole output and becomes review.md verbatim. Use the "Review finding
+You write one file: `.agent-workflow/runs/<id>/review.md`. Do not edit code or tests. Use the "Review finding
 format" exactly: one section per axis, one bullet per finding with its
 severity tag, `open: 0` under an axis with no findings. On a repeat
 round, mark a finding that is now fixed on its own bullet as described

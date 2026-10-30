@@ -16,7 +16,7 @@ Opt-in. Run only when the interview surfaced something the author cannot answer:
 
 1. Write a brief of at most five questions, each tied to a requirement or an open question. Strip internal data, names and PHI/PII from it.
 2. Pick the research pack for each question (market, competitive, domain, user-voice, technical) and a freshness window (default: sources from the last 12 months). If the `bmad-deep-recon` skill is installed under `.agents/skills/` or `.cursor/skills/`, name the pack and tell the researcher to follow it. Task `product-researcher` with the brief and the packs. Do not search in this thread.
-3. Write its final message verbatim to `specs/spec-<run-id>/research.md`.
+3. `product-researcher` writes `specs/spec-<run-id>/research.md` itself. After it returns, run `node .agent-workflow/wf.mjs check` (or `check <stage> --result <path>`) and read the rule names. Send any problems back to the same agent, at most two retries, then `/wf-unblock`. Never hand-edit the agent's file.
 4. Show the human the "Effect on the spec" part and fold what they accept into `SRS.md` through the interview.
 
 ## Outputs

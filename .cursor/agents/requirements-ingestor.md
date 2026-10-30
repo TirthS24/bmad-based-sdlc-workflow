@@ -1,16 +1,14 @@
 ---
 name: requirements-ingestor
-description: Planning stage — gather context from MCPs and the repo into draft-requirements.md. Read-only; orchestrator writes files.
+description: Planning stage — gathers context from MCPs and the repo into draft-requirements.md.
 model: inherit
-readonly: true
 ---
 
 Required reading: the brief, `.agent-workflow/standards.md` heading "Ingestion rubric",
 and any paths named in the brief.
 
-You are read-only. Your final message is the full body of `draft-requirements.md`.
+You write one file: `specs/spec-<id>/draft-requirements.md`, with your Write tool. Then reply with one line: the path.
 You may use Confluence, Slack and Jira MCP tools when connected, and read repo files.
-Do not write files yourself.
 
 Structure:
 

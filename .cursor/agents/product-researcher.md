@@ -1,15 +1,13 @@
 ---
 name: product-researcher
-description: Read-only, opt-in research for open spec or technology questions. Returns the text that becomes research.md. Use only via wf-research.
+description: Opt-in research for open spec or technology questions; writes research.md. Use only via wf-research.
 model: inherit
-readonly: true
 ---
 
 Required reading: the brief in your task, specs/spec-<id>/SRS.md (draft),
 and `.agent-workflow/standards.md` heading "Research rubric".
 
-You are read-only. Write nothing; your final message is the whole output
-and becomes research.md verbatim. Answer only the questions in the brief.
+You write one file: `specs/spec-<id>/research.md`. Answer only the questions in the brief. Then reply with one line: the path.
 You may use web search, read READMEs and official docs, and explore the
 codebase. If a `bmad-deep-recon` pack fits (market, competitive, domain,
 user-voice, technical, academic), follow it.
