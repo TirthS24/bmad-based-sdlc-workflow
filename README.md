@@ -107,15 +107,15 @@ A run has a profile: `full` (the default), `pm` (tickets only, for Jira), `dev` 
 | Stage / gate | `pm` (tickets to Jira) | `dev` (alpha bug) | `docs` | `full` |
 |---|---|---|---|---|
 | planning | runs | runs (one ticket, bug repro as the test) | runs | runs |
-| gate_spec | you (or auto: `planning_clean` in `dev`) | auto: `planning_clean` | you | you |
+| gate_spec | you | auto: `planning_clean` | you | you |
 | feasibility, gate_approach | skipped | runs; gate auto: `approach_low_risk` | skipped | runs; you |
 | tests, gate_tests | skipped | runs; gate auto: `red_for_right_reason` | skipped | runs; you |
-| implement, review | skipped | runs; gate_review auto: `no_open_high_or_decision` | implement writes `docs/**`; gate_review auto | runs; you |
+| implement, review | skipped | runs; gate_review auto: `no_open_high_or_decision` | implement writes the docs globs (`docs/**`, `**/*.md`); gate_review auto | runs; you |
 | verify | skipped | runs | runs `docs_lint` and `links` | runs |
 | gate_final | auto: `specs_only_unchanged` | you | you | you |
 | pr | runs (specs only) | runs | runs | runs |
 
-A profile can pass a gate without you when its rule holds (for example `approach_low_risk` in `dev` only when the architect's decision block says no contract, migration or dependency change). An auto-pass is recorded with its reason and listed in the PR body's `## Gates` table. A declined auto-pass stays with you and the status line says why. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) section 4a.
+A profile can pass a gate without you when its rule holds (for example `approach_low_risk` in `dev` only when the architect's decision block says no contract, migration or dependency change). An auto-pass is recorded with its reason and listed in the PR body's `## Gates` table. A declined auto-pass stays with you and the status line says why. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) section 4.
 
 ## Commands for the human
 

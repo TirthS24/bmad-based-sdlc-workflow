@@ -131,17 +131,17 @@ sequenceDiagram
 
 The conductor **never** approves or rejects a gate itself. You type only at gates and for the human-only commands in `invocation.human_only` (`capabilities.json`); the conductor runs every other stage itself.
 
-## 4a. Profiles and auto-passed gates
+## 4. Profiles and auto-passed gates
 
 Each run has a profile. The profile says which stages run, which gates you must pass, what each stage may write, and which verify tiers run. The profiles are defined in `.agent-workflow/workflow.json` under `profiles`.
 
 | Stage / gate | `pm` (tickets to Jira) | `dev` (alpha bug) | `docs` | `full` |
 |---|---|---|---|---|
 | planning | runs | runs (one ticket, bug repro as the test) | runs | runs |
-| gate_spec | you (or auto: `planning_clean` in `dev`) | auto: `planning_clean` | you | you |
+| gate_spec | you | auto: `planning_clean` | you | you |
 | feasibility, gate_approach | skipped | runs; gate auto: `approach_low_risk` | skipped | runs; you |
 | tests, gate_tests | skipped | runs; gate auto: `red_for_right_reason` | skipped | runs; you |
-| implement, review | skipped | runs; gate_review auto: `no_open_high_or_decision` | implement writes `docs/**`; gate_review auto | runs; you |
+| implement, review | skipped | runs; gate_review auto: `no_open_high_or_decision` | implement writes the docs globs (`docs/**`, `**/*.md`); gate_review auto | runs; you |
 | verify | skipped | runs | runs `docs_lint` and `links` | runs |
 | gate_final | auto: `specs_only_unchanged` | you | you | you |
 | pr | runs (specs only) | runs | runs | runs |
@@ -170,7 +170,7 @@ When an auto-pass is declined, the status line and the `next_action` say why, fo
 
 **Conductor-run stages.** The conductor runs every stage except the gates and the human-only commands (`invocation.human_only` in `capabilities.json`). Sub-agents that write an artifact write it to a fixed path themselves. The conductor checks it with `wf check`, and sends any problem back to the same agent, at most twice, before `/wf-unblock`. Nobody hand-edits an agent's artifact.
 
-## 4. One-time setup
+## 5. One-time setup
 
 Prerequisites: Cursor with project skills + subagents enabled (or Claude Code), Node.js 20.12+, Git, `gh` logged in with a GitHub `origin` remote, `uv` (for BMAD skills).
 
@@ -203,7 +203,7 @@ Then edit `.agent-workflow/config.json`. The important fields:
 | `loop_caps` | `implement` 5, `review` 3, `verify_fix` 2. |
 | `telemetry` | `enabled`, `server_url`, `required`. Leave `server_url` empty to stay local. |
 
-## 5. Running it: a worked example
+## 6. Running it: a worked example
 
 Ticket: *"PAT-1234: show an inline error when the email field on the signup form is invalid."*
 
@@ -249,7 +249,7 @@ Check where you are at any time:
 node .agent-workflow/wf.mjs status
 ```
 
-## 6. Command cheat sheet
+## 7. Command cheat sheet
 
 **Slash skills (in Agent chat)**
 
@@ -277,13 +277,13 @@ node .agent-workflow/wf.mjs status
 | `goto <stage>` | Backwards always works; forwards only over stages whose artifact passes and never over an unapproved gate. |
 | `escalation list\|retry\|reject\|abort` | Get out of a loop-cap/stuck stop. |
 | `run --profile <name>` | Start a run under a profile (`full`, `pm`, `dev`, `docs`). |
-| `profile <name>` | Switch the profile (human-only; see section 4a). |
+| `profile <name>` | Switch the profile (human-only; see section 4). |
 | `check [stage] [--result <path>]` | Run a stage's check without advancing; print every problem; preview the next gate's auto-pass. |
 | `adr` | Copy the run's decision record to `docs/adr/NNNN-<slug>.md`. |
 | `doctor` | Check capabilities, skills, agents, standards agree. |
 | `login`, `sync`, `whoami`, `logout`, `report-failure` | Telemetry. |
 
-## 7. What to take care of
+## 8. What to take care of
 
 **Do**
 
@@ -321,7 +321,7 @@ node .agent-workflow/wf.mjs status
 - Not every change needs a run. A typo or one-line fix you will review yourself can just be edited directly (when no run is active).
 - Telemetry is optional. With `telemetry.required: true` you must `wf login` first (the cached token works offline). Server setup is in `docs/RUNBOOK.md`.
 
-## 8. Where things live
+## 9. Where things live
 
 | Path | What |
 | --- | --- |
