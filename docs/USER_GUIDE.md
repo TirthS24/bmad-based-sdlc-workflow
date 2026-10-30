@@ -129,7 +129,7 @@ sequenceDiagram
   end
 ```
 
-The conductor **never** approves or rejects a gate itself.
+The conductor **never** approves or rejects a gate itself. You type only at gates and for the human-only commands in `invocation.human_only` (`capabilities.json`); the conductor runs every other stage itself.
 
 ## 4. One-time setup
 

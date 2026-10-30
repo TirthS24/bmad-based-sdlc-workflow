@@ -15,7 +15,7 @@ This repository is a Cursor project for a gated, spec-driven build pipeline. It 
 | Path | Role |
 | --- | --- |
 | `AGENTS.md` | Always-on pointer. Check status, then follow `next_action`. |
-| `.cursor/skills/wf-*` | Pipeline skills. Slash-only (`disable-model-invocation`). |
+| `.cursor/skills/wf-*` | Pipeline skills. Conductor stages are model-invocable; human-only commands (`invocation.human_only` in `capabilities.json`) keep `disable-model-invocation`. |
 | `.agents/skills/bmad-*` | BMAD skills Cursor also loads (spec, review, code review, and others on the allowlist). |
 | `server/` | Telemetry server and admin dashboard (its own `package.json`; needs Postgres). |
 | `installer/` | `install.mjs`, the per-harness installer. |
