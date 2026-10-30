@@ -28,6 +28,33 @@ const BEGIN = '<!-- wf:begin (managed by the workflow installer; edit outside th
 const END = '<!-- wf:end -->';
 
 const read = (f) => fs.readFileSync(f, 'utf8');
+
+// Claude Code tool lists for the agents, from the spike in docs/adapter-contract.md. Writers keep
+// Write and Edit but never Bash, so they cannot write around the scope check. Readers get no write
+// or shell tool. The ingestor and synthesizer keep MCP access by denying only what they must not use.
+const WRITER_TOOLS = { tools: 'Read, Write, Edit, Grep, Glob' };
+const CLAUDE_TOOLS = {
+  'srs-writer': WRITER_TOOLS,
+  'ticket-writer': WRITER_TOOLS,
+  'acceptance-test-writer': WRITER_TOOLS,
+  'product-researcher': WRITER_TOOLS,
+  'solution-architect': WRITER_TOOLS,
+  'code-reviewer': WRITER_TOOLS,
+  'requirements-ingestor': { disallowedTools: 'Bash' },
+  'requirements-griller': { tools: 'Read, Grep, Glob' },
+  'requirements-synthesizer': { disallowedTools: 'Write, Edit, NotebookEdit, Bash' },
+};
+
+// Rewrites an agent's frontmatter for Claude Code: drops `readonly` and sets the tool lists above.
+// Agents not listed (implementer, verifier, test-architect) pass through unchanged.
+export function translateAgent(text, name) {
+  const m = /^---\n([\s\S]*?)\n---\n?/.exec(text);
+  const spec = CLAUDE_TOOLS[name];
+  if (!m || !spec) return text;
+  const kept = m[1].split('\n').filter((l) => !/^(readonly|tools|disallowedTools):/.test(l));
+  const added = Object.entries(spec).map(([k, v]) => `${k}: ${v}`);
+  return `---\n${[...kept, ...added].join('\n')}\n---\n${text.slice(m[0].length)}`;
+}
 const readJson = (f, d = null) => { try { return JSON.parse(read(f)); } catch { return d; } };
 const writeJson = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, `${JSON.stringify(o, null, 2)}\n`); };
 const copyDir = (from, to) => fs.cpSync(from, to, { recursive: true, force: true });
@@ -145,7 +172,11 @@ export function install({ target, harness, server }) {
   }
   for (const a of agents) {
     const from = path.join(SRC, '.cursor', 'agents', `${a}.md`);
-    if (fs.existsSync(from)) { fs.mkdirSync(path.join(target, h.agents), { recursive: true }); fs.copyFileSync(from, path.join(target, h.agents, `${a}.md`)); }
+    if (fs.existsSync(from)) {
+      fs.mkdirSync(path.join(target, h.agents), { recursive: true });
+      const out = harness === 'claude-code' ? translateAgent(read(from), a) : read(from);
+      fs.writeFileSync(path.join(target, h.agents, `${a}.md`), out);
+    }
   }
 
   // Enforcement for this harness.
