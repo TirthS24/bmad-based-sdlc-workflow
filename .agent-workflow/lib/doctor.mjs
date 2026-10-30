@@ -78,6 +78,17 @@ export function doctor() {
   }
   for (const name of agents.keys()) if (!referencedAgents.has(name)) problems.push(`agent ${name} is not referenced by any stage`);
 
+  // Human-only skills keep disable-model-invocation; conductor skills must not have it.
+  const flagged = (name) => skills.get(name).some((f) => /^disable-model-invocation:\s*true\s*$/m.test(fs.readFileSync(f, 'utf8')));
+  for (const name of manifest.invocation?.human_only || []) {
+    if (!skills.has(name)) problems.push(`human-only skill ${name} not found`);
+    else if (!flagged(name)) problems.push(`${name} is human-only but lacks disable-model-invocation: true`);
+  }
+  for (const name of manifest.invocation?.conductor || []) {
+    if (!skills.has(name)) problems.push(`conductor skill ${name} not found`);
+    else if (flagged(name)) problems.push(`${name} is a conductor skill but has disable-model-invocation: true`);
+  }
+
   const eventsFile = path.join(WF_DIR, 'events.jsonl');
   if (fs.existsSync(eventsFile)) {
     const lines = fs.readFileSync(eventsFile, 'utf8').trim().split('\n').filter(Boolean);

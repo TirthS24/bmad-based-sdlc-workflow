@@ -1,7 +1,6 @@
 ---
 name: wf-implement
-description: "Pipeline stage: one implementer attempt to make frozen tests pass. Invoked only by the pipeline; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline stage: implement. Run only when `wf status` says the stage is implement."
 ---
 
 ## Required reading before acting

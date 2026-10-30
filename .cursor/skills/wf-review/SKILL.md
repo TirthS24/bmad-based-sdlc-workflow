@@ -1,7 +1,6 @@
 ---
 name: wf-review
-description: "Pipeline stage: independent code review by the code-reviewer agent, fixes via the implementer. Invoked only by the pipeline; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline stage: review. Run only when `wf status` says the stage is review."
 ---
 
 ## Required reading before acting

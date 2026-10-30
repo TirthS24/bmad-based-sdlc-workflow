@@ -1,7 +1,6 @@
 ---
 name: wf-verify
-description: "Pipeline stage: run the full verification suite and assemble the evidence bundle. Invoked only by the pipeline; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline stage: verify. Run only when `wf status` says the stage is verify."
 ---
 
 ## Required reading before acting

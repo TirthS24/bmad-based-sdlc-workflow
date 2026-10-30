@@ -1,7 +1,6 @@
 ---
 name: wf-spec-review
-description: "Pipeline helper: check SRS, questions, and tickets before planning is done. Invoked from wf-start only."
-disable-model-invocation: true
+description: "Pipeline stage: planning. Run only when `wf status` says the stage is planning."
 ---
 
 ## Required reading before acting

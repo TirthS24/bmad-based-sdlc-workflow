@@ -1,7 +1,6 @@
 ---
 name: wf-start
-description: "Pipeline stage: planning — ingest, grill/synthesize, SRS, tickets, ACs. Invoked only by wf-run or the human."
-disable-model-invocation: true
+description: "Pipeline stage: planning. Run only when `wf status` says the stage is planning."
 ---
 
 ## Required reading before acting

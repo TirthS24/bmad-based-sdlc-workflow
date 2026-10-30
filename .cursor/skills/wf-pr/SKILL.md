@@ -1,7 +1,6 @@
 ---
 name: wf-pr
-description: "Pipeline stage: commit the run's files and open a GitHub PR. Invoked only after gate_final is approved."
-disable-model-invocation: true
+description: "Pipeline stage: pr. Run only when `wf status` says the stage is pr."
 ---
 
 ## Required reading before acting

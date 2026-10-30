@@ -1,7 +1,6 @@
 ---
 name: wf-research
-description: "Pipeline stage helper: dispatch product-researcher for open spec questions and write research.md. Invoked only from wf-start; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline stage: planning. Run only when `wf status` says the stage is planning."
 ---
 
 ## Required reading before acting

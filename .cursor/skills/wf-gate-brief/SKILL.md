@@ -1,7 +1,6 @@
 ---
 name: wf-gate-brief
-description: "Gate helper: turn the gathered facts for a human gate into a short plain-language brief. Run when a gate is reached; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline gate brief. Run only when `wf status` says a gate is pending."
 ---
 
 ## Required reading before acting

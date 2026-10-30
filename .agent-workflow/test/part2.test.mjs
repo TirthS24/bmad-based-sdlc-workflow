@@ -48,6 +48,8 @@ test('doctor: each kind of inconsistency is reported', (t) => {
     ['a read-only agent with a write tool', (r) => r.file('.cursor/agents/code-reviewer.md', '---\nname: code-reviewer\nreadonly: true\ntools: Read, Write\n---\n'), /readonly but lists a write tool/],
     ['a duplicate skill name', (r) => r.file('.agents/skills/wf-verify/SKILL.md', '---\nname: wf-verify\n---\n'), /duplicate skill wf-verify/],
     ['an oversized wf skill', (r) => r.file('.cursor/skills/wf-verify/SKILL.md', `${'x\n'.repeat(160)}`), /wf-verify\/SKILL\.md is over 150 lines/],
+    ['a conductor skill with the human-only flag', (r) => r.file('.cursor/skills/wf-verify/SKILL.md', '---\nname: wf-verify\ndisable-model-invocation: true\n---\n'), /wf-verify is a conductor skill but has disable-model-invocation/],
+    ['a human-only skill without the flag', (r) => r.file('.cursor/skills/wf-approve/SKILL.md', '---\nname: wf-approve\n---\n'), /wf-approve is human-only but lacks disable-model-invocation/],
     ['a retired term (Gerrit)', (r) => r.file('.cursor/skills/wf-pr/SKILL.md', 'Push to refs/for/main for Gerrit\n'), /retired term/],
     ['a retired term (gate1)', (r) => r.file('.cursor/agents/verifier.md', '---\nname: verifier\n---\nafter gate1\n'), /retired term \(gate1\)/],
     ['a rule section that does not exist', (r) => manifest(r, (m) => { m.stages.pr.rules = ['No Such Section']; }), /no "No Such Section" section/],

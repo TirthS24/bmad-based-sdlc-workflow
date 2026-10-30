@@ -1,7 +1,6 @@
 ---
 name: wf-tests
-description: "Pipeline stage: write failing ATDD tests, confirm red for the right reason. Invoked only by the pipeline; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline stage: tests. Run only when `wf status` says the stage is tests."
 ---
 
 ## Required reading before acting

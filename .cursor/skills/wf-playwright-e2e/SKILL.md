@@ -1,7 +1,6 @@
 ---
 name: wf-playwright-e2e
-description: "Reference for writing and running the product (flow) tests as Playwright scripts. Used by wf-tests and wf-verify; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline stage: tests or verify. Run only when `wf status` says the stage is tests or verify."
 ---
 
 ## Required reading before acting

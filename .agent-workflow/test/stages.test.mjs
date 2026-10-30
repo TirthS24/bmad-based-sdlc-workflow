@@ -39,7 +39,7 @@ test('planning: needs SRS.md, questions, tickets, REQ ids and success lines', (t
   assert.equal(s.stages.planning.status, 'done');
   assert.equal(s.stages.planning.result, srs);
   assert.ok(s.stages.planning.finished_at);
-  assert.match(s.current.next_action, /^Human: review SRS\.md/);
+  assert.match(s.current.next_action, /^Ask the human to review SRS\.md/);
   assert.deepEqual(repo.events().at(-1), {
     ts: repo.events().at(-1).ts,
     type: 'done',
@@ -188,7 +188,7 @@ test('verify: runs every tier and needs a non-empty evidence bundle', (t) => {
   fs.writeFileSync(path.join(evidence, 'shot.png'), 'x');
   assert.equal(repo.run(['done', 'verify']).status, 0);
   assert.equal(repo.state().current.stage, 'gate_final');
-  assert.match(repo.state().current.next_action, /^Human: read the evidence bundle/);
+  assert.match(repo.state().current.next_action, /^Ask the human to read the evidence bundle/);
   assert.deepEqual(repo.state().stages.verify.tiers.map((t) => [t.tier, t.skipped, t.code]), [
     ['unit', false, 0], ['lint', false, 0], ['typecheck', true, 0], ['format', true, 0], ['complexity', true, 0], ['e2e', true, 0], ['a11y', true, 0],
   ]);

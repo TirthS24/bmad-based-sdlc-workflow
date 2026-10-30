@@ -4,16 +4,16 @@ import { expandWritePatterns } from './globs.mjs';
 
 export const NEXT_ACTION = {
   planning: 'Run /wf-start. … Then: node .agent-workflow/wf.mjs done planning --result specs/spec-<id>/SRS.md',
-  gate_spec: 'Human: review SRS.md and persona tickets, then /wf-approve gate_spec (or /wf-reject gate_spec <reason>)',
+  gate_spec: 'Ask the human to review SRS.md and persona tickets, then they run /wf-approve gate_spec (or /wf-reject gate_spec <reason>)',
   feasibility: 'Run /wf-feasibility (dispatches solution-architect). Write approach.md. Then: node .agent-workflow/wf.mjs done feasibility --result specs/spec-<id>/approach.md',
-  gate_approach: 'Human: review approach.md, choose A|B|C, then /wf-approve gate_approach --approach <A|B|C> (or /wf-reject gate_approach <reason>)',
+  gate_approach: 'Ask the human to review approach.md, choose A|B|C, then they run /wf-approve gate_approach --approach <A|B|C> (or /wf-reject gate_approach <reason>)',
   tests: 'Run /wf-tests (test-architect atdd). Then: node .agent-workflow/wf.mjs done tests --result <test path or dir>',
-  gate_tests: 'Human: review the new failing tests, then /wf-approve gate_tests (or /wf-reject gate_tests <reason>)',
+  gate_tests: 'Ask the human to review the new failing tests, then they run /wf-approve gate_tests (or /wf-reject gate_tests <reason>)',
   implement: 'Run /wf-implement (one attempt). The stop hook re-submits until green or the cap.',
   review: 'Run /wf-review (dispatches code-reviewer; fixes go to implementer). Then: node .agent-workflow/wf.mjs done review --result <review output path>',
-  gate_review: 'Human: read review.md (decision-needed items), then /wf-approve gate_review (or /wf-reject gate_review <reason>, which returns to implement)',
+  gate_review: 'Ask the human to read review.md (decision-needed items), then they run /wf-approve gate_review (or /wf-reject gate_review <reason>, which returns to implement)',
   verify: 'Run /wf-verify. Then: node .agent-workflow/wf.mjs done verify --result .agent-workflow/runs/<id>/evidence/',
-  gate_final: 'Human: read the evidence bundle, then /wf-approve gate_final. This unlocks commit, push and the PR (or /wf-reject gate_final <reason>)',
+  gate_final: 'Ask the human to read the evidence bundle, then they run /wf-approve gate_final. This unlocks commit, push and the PR (or /wf-reject gate_final <reason>)',
   pr: 'Run /wf-pr: commit the run files on the run branch, write .agent-workflow/runs/<id>/pr-summary.md (plain-language summary of the code changes), then: node .agent-workflow/wf.mjs pr (add --dry-run to preview the PR body)',
   done: 'Run complete. No further pipeline action.',
 };

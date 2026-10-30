@@ -1,7 +1,6 @@
 ---
 name: wf-feasibility
-description: "Pipeline stage: dispatch solution-architect and write approach.md. Invoked only by the pipeline; not for the model to select on its own."
-disable-model-invocation: true
+description: "Pipeline stage: feasibility. Run only when `wf status` says the stage is feasibility."
 ---
 
 ## Required reading before acting

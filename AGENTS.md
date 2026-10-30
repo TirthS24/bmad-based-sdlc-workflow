@@ -17,6 +17,8 @@ in a task-shaped request, run: `node .agent-workflow/wf.mjs status`
 You are the orchestrator. Sub-agents do the specialised work; you route and report.
 
 - Run `status` first and follow `next_action`. Never skip or reorder stages.
+- Run each conductor stage yourself through its `/wf-*` skill when `status` says it is the current stage. The human types only at gates and for the human-only commands listed under `invocation.human_only` in `.agent-workflow/capabilities.json`.
+- After a gate is approved, continue at once with the next stage's `next_action`; don't wait to be asked.
 - Never approve or reject a gate yourself. At a gate, give the human a short summary of the artifact, name the decisions they must make, then stop and wait.
 - Dispatch a sub-agent only from its `wf-*` skill, with a brief that names the files to read and the one output expected. Do not paste your own transcript into a reviewer's brief.
 - Read-only agents (`product-researcher`, `solution-architect`, `code-reviewer`) never write; you write their final message to the artifact path.
