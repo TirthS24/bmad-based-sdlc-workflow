@@ -10,6 +10,7 @@ import { guardShell } from '../lib/guards.mjs';
 import { parseArgs } from '../wf.mjs';
 import { VALID_SRS, VALID_QUESTIONS, VALID_TICKET_BE, withRun } from './helpers.mjs';
 import { checkQuestions, checkTickets } from '../lib/tickets.mjs';
+import { formatProblem } from '../lib/problems.mjs';
 
 test('globToRegExp: *, ** and escaping', () => {
   assert.ok(globToRegExp('src/*.js').test('src/a.js'));
@@ -111,9 +112,9 @@ test('checkTickets: validation cases', (t) => {
   const dir = `specs/spec-${id}/tickets/be`;
   assert.equal(checkTickets(state, srs).length, 0);
   repo.file(`${dir}/bad.json`, '{}');
-  assert.ok(checkTickets(state, srs).some((p) => /missing id|missing persona/.test(p)));
+  assert.ok(checkTickets(state, srs).some((p) => /ticket required fields: found .*: no (id|persona)/.test(formatProblem(p))));
   repo.file(`${dir}/bad.json`, `${JSON.stringify({ ...VALID_TICKET_BE, id: 'TKT-BE-001', persona: 'qa' }, null, 2)}\n`);
-  assert.ok(checkTickets(state, srs).some((p) => /persona folder/.test(p)));
+  assert.ok(checkTickets(state, srs).some((p) => /ticket folder matches persona/.test(formatProblem(p))));
 });
 
 test('checkQuestions: synthesis sources and human answers', (t) => {
@@ -126,13 +127,13 @@ test('checkQuestions: synthesis sources and human answers', (t) => {
     answered_by: 'synthesis',
     sources: [],
   }]));
-  assert.ok(checkQuestions(state).some((p) => /no sources/.test(p)));
+  assert.ok(checkQuestions(state).some((p) => /no sources/.test(formatProblem(p))));
   repo.file(`specs/spec-${id}/grill/questions.json`, JSON.stringify([{
     ...VALID_QUESTIONS[0],
     answered_by: 'synthesis',
     sources: ['https://evil.slack.com/archives/C123'],
   }]));
-  assert.ok(checkQuestions(state).some((p) => /Slack-only/.test(p)));
+  assert.ok(checkQuestions(state).some((p) => /Slack-only/.test(formatProblem(p))));
   repo.file(`specs/spec-${id}/grill/questions.json`, JSON.stringify([{
     ...VALID_QUESTIONS[0],
     answered_by: 'human',

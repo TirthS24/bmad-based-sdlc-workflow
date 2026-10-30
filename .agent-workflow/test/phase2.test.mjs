@@ -96,15 +96,15 @@ test('freeze hash ignores unit tests and follows product tests', (t) => {
 test('tests stage: e2e must fail and cite an id; exit 0 is refused', (t) => {
   const { repo } = setup(t);
   repo.setStage('tests');
-  fails(repo.run(['done', 'tests'], { env: { FAKE_STATUS: 'expected' } }), /new tests must fail \(the e2e tier exited 0\)/);
-  fails(repo.run(['done', 'tests'], { env: { FAKE_TITLE: 'no ids here' } }), /must cite REQ \/ TECH \/ PRD ids/);
+  fails(repo.run(['done', 'tests'], { env: { FAKE_STATUS: 'expected' } }), /new tests are red: found the e2e tier exited 0/);
+  fails(repo.run(['done', 'tests'], { env: { FAKE_TITLE: 'no ids here' } }), /failures cite ids/);
   assert.equal(repo.run(['done', 'tests']).status, 0);
 });
 
 test('verify: a failing e2e test blocks, a missing report blocks', (t) => {
   const { repo } = setup(t);
   repo.setStage('verify');
-  fails(repo.run(['done', 'verify']), /e2e failed \(exit 1\)/);
+  fails(repo.run(['done', 'verify']), /e2e tier: found exit 1/);
   fails(repo.run(['done', 'verify'], { env: { FAKE_STATUS: 'expected', FAKE_NO_REPORT: '1' } }), /no JSON report/);
 });
 
@@ -128,7 +128,7 @@ test('seed runs before e2e and a failed seed fails the tier', (t) => {
   const { repo } = setup(t);
   repo.setStage('verify');
   repo.config({ commands: { seed: 'exit 7' } });
-  fails(repo.run(['done', 'verify'], { env: { FAKE_STATUS: 'expected' } }), /e2e failed \(exit 7\)/);
+  fails(repo.run(['done', 'verify'], { env: { FAKE_STATUS: 'expected' } }), /e2e tier: found exit 7/);
 });
 
 test('fixture run: suite is red, implementer turns it green, verify records it', (t) => {
@@ -137,7 +137,7 @@ test('fixture run: suite is red, implementer turns it green, verify records it',
   repo.setStage('tests');
   assert.equal(repo.run(['done', 'tests']).status, 0, 'red before implementation');
   repo.setStage('implement');
-  fails(repo.run(['done', 'implement']), /e2e failed \(exit 1\)/);
+  fails(repo.run(['done', 'implement']), /e2e tier: found exit 1/);
   repo.file('src/greeting.js', 'module.exports = "hello";');
   assert.equal(repo.run(['done', 'implement']).status, 0, 'green after implementation');
   repo.setStage('verify');
@@ -165,7 +165,7 @@ test('tests stage: red because the app or browser never started is refused', (t)
     "Error: browserType.launch: Executable doesn't exist at /ms-playwright/chromium",
     'Error: Timed out waiting 60000ms from config.webServer.',
   ]) {
-    fails(repo.run(['done', 'tests'], { env: { FAKE_ERROR: err } }), /red for the wrong reason/);
+    fails(repo.run(['done', 'tests'], { env: { FAKE_ERROR: err } }), /red for the right reason/);
   }
   assert.equal(repo.state().current.stage, 'tests');
 });

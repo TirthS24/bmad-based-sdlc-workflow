@@ -54,7 +54,7 @@ export async function main(argv = process.argv.slice(2)) {
   const { flags, rest } = parseArgs(argv);
   const cmd = rest[0];
   if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') {
-    process.stdout.write(`usage: wf.mjs <init|gate-check|ci-check|login|logout|whoami|sync|report-failure|doctor|adr|brief|goto|escalation|run|status|done|tickets|agent|approve|reject|pr|verify|guard|log|prune|abort|pause|resume> [args]\n`);
+    process.stdout.write(`usage: wf.mjs <init|gate-check|ci-check|login|logout|whoami|sync|report-failure|doctor|adr|brief|goto|escalation|run|status|done|check|tickets|agent|approve|reject|pr|verify|guard|log|prune|abort|pause|resume> [args]\n`);
     process.exit(cmd ? 0 : 1);
   }
   if (cmd === 'init') return cmdInit(flags);
@@ -73,6 +73,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (cmd === 'run') return c.cmdRun(rest.slice(1).join(' '));
   if (cmd === 'status') return c.cmdStatus(flags, adapter);
   if (cmd === 'done') return c.cmdDone(rest[1], flags.result);
+  if (cmd === 'check') return c.cmdCheck(rest[1], flags.result);
   if (cmd === 'tickets') return c.cmdTickets(rest[1]);
   if (cmd === 'agent') return c.cmdAgent(rest[1], rest[2]);
   if (cmd === 'approve') return c.cmdApprove(rest[1], flags.approach);

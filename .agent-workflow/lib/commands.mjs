@@ -15,6 +15,7 @@ import { PATHS, REPO_ROOT, posixRel, specDir } from './paths.mjs';
 import { adrCommitted } from './adr.mjs';
 import { buildPrBody, decisionRecord, prSummaryPath, prTitle } from './pr.mjs';
 import { commitsSince, lastVerify, postcondition } from './postconditions.mjs';
+import { formatProblems } from './problems.mjs';
 import {
   checkQuestions, checkTickets, escalationCount, srsSectionChecks, ticketsHash,
 } from './tickets.mjs';
@@ -89,8 +90,8 @@ export function cmdDone(stage, resultPath) {
   const stg = stageById(workflow, stage);
   if (!stg) die(`unknown stage ${stage}`);
   if (stg.executor === 'human') die('human gates use wf approve, not wf done');
-  const err = postcondition(stage, state, resultPath);
-  if (err) die(`postcondition failed: ${err}`);
+  const problems = postcondition(stage, state, resultPath);
+  if (problems.length) die(`postcondition failed for ${stage} (${problems.length} problem${problems.length === 1 ? '' : 's'}):\n${formatProblems(problems)}`);
   if (stage === 'tests') {
     state.freeze.test_files_hash = freezeHash(loadConfig());
   }
@@ -114,6 +115,22 @@ export function cmdDone(stage, resultPath) {
   process.stdout.write(`${formatStatus(state)}\n`);
 }
 
+// `wf check [stage] [--result <path>]`: run a stage's postcondition without advancing. Defaults to
+// the current stage. Works for an earlier stage too, so an agent's artifact can be checked on its own.
+export function cmdCheck(stage, resultPath) {
+  const state = loadState();
+  if (!state?.run?.id) die('no active run');
+  const target = stage || state.current.stage;
+  if (!stageById(loadWorkflow(), target)) die(`unknown stage ${target}`);
+  const problems = postcondition(target, state, resultPath);
+  if (problems.length) {
+    process.stderr.write(`${formatProblems(problems)}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`check ${target}: passed\n`);
+}
+
+// `wf tickets check` is kept as an alias for planning's checks.
 export function cmdTickets(sub) {
   if (sub !== 'check') die('usage: wf tickets check');
   const state = loadState();
@@ -125,7 +142,7 @@ export function cmdTickets(sub) {
     ...checkTickets(state, srs || ''),
   ];
   if (problems.length) {
-    for (const p of problems) process.stderr.write(`${p}\n`);
+    process.stderr.write(`${formatProblems(problems)}\n`);
     process.exit(1);
   }
   process.stdout.write('tickets ok\n');

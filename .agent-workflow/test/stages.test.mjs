@@ -25,11 +25,11 @@ test('done needs an active run, the current stage, and a non-human stage', (t) =
 test('planning: needs SRS.md, questions, tickets, REQ ids and success lines', (t) => {
   const { repo, id } = withRun(t);
   const srs = `specs/spec-${id}/SRS.md`;
-  fails(repo.run(['done', 'planning']), /postcondition failed: missing specs\/spec-.*\/SRS\.md/);
+  fails(repo.run(['done', 'planning']), /SRS\.md exists: found no SRS\.md/);
   repo.file(srs, `${VALID_SRS}\n[OPEN QUESTION] who?\n`);
-  fails(repo.run(['done', 'planning']), /SRS\.md still contains \[OPEN QUESTION\] markers/);
+  fails(repo.run(['done', 'planning']), /no open questions in SRS\.md: found a \[OPEN QUESTION\] marker/);
   repo.file(srs, VALID_SRS);
-  fails(repo.run(['done', 'planning']), /missing grill\/questions\.json/);
+  fails(repo.run(['done', 'planning']), /grill questions file: found no grill\/questions\.json/);
   repo.seedPlanning(id);
   const ok = repo.run(['done', 'planning', '--result', srs]);
   assert.equal(ok.status, 0, ok.stderr);
@@ -58,20 +58,20 @@ test('planning: every REQ needs its own success line', (t) => {
     '- **REQ-2** second\n  intent: more\n  detail only\n## 7 Traceability',
   );
   repo.file(`specs/spec-${id}/SRS.md`, bad);
-  fails(repo.run(['done', 'planning']), /REQ-2 is missing a success condition/);
+  fails(repo.run(['done', 'planning']), /REQ-2 success condition: found no success line/);
 });
 
 test('feasibility: verdict, two approaches, single-commit line', (t) => {
   const { repo, id } = withRun(t);
   repo.setStage('feasibility');
   const p = `specs/spec-${id}/approach.md`;
-  fails(repo.run(['done', 'feasibility']), /missing specs\/spec-.*\/approach\.md/);
+  fails(repo.run(['done', 'feasibility']), /approach\.md exists: found no file/);
   repo.file(p, `# Approach\n## A\n## B\none commit\n${ADR}`);
-  fails(repo.run(['done', 'feasibility']), /approach\.md needs a verdict: as-is \/ with-changes \/ not-satisfiable/);
+  fails(repo.run(['done', 'feasibility']), /approach verdict: found no verdict/);
   repo.file(p, `# Approach\nVerdict: as-is\n## Only one\none commit\n${ADR}`);
-  fails(repo.run(['done', 'feasibility']), /approach\.md needs at least 2 approaches/);
+  fails(repo.run(['done', 'feasibility']), /two approaches: found/);
   repo.file(p, `# Approach\nVerdict: as-is\n## A\n## B\n${ADR}`);
-  fails(repo.run(['done', 'feasibility']), /approach\.md needs a single-commit-fit line/);
+  fails(repo.run(['done', 'feasibility']), /single-commit fit line: found no such line/);
   repo.file(p, VALID_APPROACH);
   assert.equal(repo.run(['done', 'feasibility', '--result', p]).status, 0);
   assert.equal(repo.state().current.stage, 'gate_approach');
@@ -88,9 +88,9 @@ test('tests: new tests must fail and cite an id, then the freeze hash is stored'
   const { repo } = withRun(t);
   repo.setStage('tests');
   repo.config({ commands: { unit: 'exit 0' } });
-  fails(repo.run(['done', 'tests']), /new tests must fail \(the unit tier exited 0\)/);
+  fails(repo.run(['done', 'tests']), /new tests are red: found the unit tier exited 0/);
   repo.config({ commands: { unit: 'echo boom; exit 1' } });
-  fails(repo.run(['done', 'tests']), /failing tests must cite REQ \/ TECH \/ PRD ids/);
+  fails(repo.run(['done', 'tests']), /failures cite ids: found a failure with no REQ, TECH or PRD id/);
   repo.config({ commands: { unit: 'echo "FAILED REQ-1 happy"; exit 1' } });
   repo.file('tests/test_a.py', 'A');
   assert.equal(repo.run(['done', 'tests', '--result', 'tests']).status, 0);
@@ -103,7 +103,7 @@ test('tests: a skipped unit tier counts as not failing', (t) => {
   const { repo } = withRun(t);
   repo.setStage('tests');
   repo.config({ commands: { unit: '' } });
-  fails(repo.run(['done', 'tests']), /new tests must fail/);
+  fails(repo.run(['done', 'tests']), /new tests are red/);
 });
 
 test('freeze hash follows test_globs content only', (t) => {
@@ -130,9 +130,9 @@ test('implement: unit and lint must pass', (t) => {
   const { repo } = withRun(t);
   repo.setStage('implement');
   repo.config({ commands: { unit: 'exit 1', lint: 'exit 0' } });
-  fails(repo.run(['done', 'implement']), /unit failed \(exit 1\)/);
+  fails(repo.run(['done', 'implement']), /unit tier: found exit 1/);
   repo.config({ commands: { unit: 'exit 0', lint: 'exit 2' } });
-  fails(repo.run(['done', 'implement']), /lint failed \(exit 2\)/);
+  fails(repo.run(['done', 'implement']), /lint tier: found exit 2/);
   repo.config({ commands: { unit: 'exit 0', lint: '' } });
   assert.equal(repo.run(['done', 'implement']).status, 0);
   assert.equal(repo.state().current.stage, 'review');
@@ -141,9 +141,9 @@ test('implement: unit and lint must pass', (t) => {
 test('review: open high findings block, decision-needed goes to the gate', (t) => {
   const { repo } = withRun(t);
   repo.setStage('review');
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /missing review output: review\.md/);
+  fails(repo.run(['done', 'review', '--result', 'review.md']), /review output exists: found no file at review\.md/);
   repo.file('review.md', `${AXES}- [high] SQL injection in handler\n`);
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review still has open high findings \(1\): - \[high\] SQL injection/);
+  fails(repo.run(['done', 'review', '--result', 'review.md']), /no open high findings: found 1 open: - \[high\] SQL injection/);
   repo.file('review.md', `${AXES}- [medium] rename helper\n- [decision-needed] pick a queue\n`);
   assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0);
   assert.equal(repo.state().current.stage, 'gate_review');
@@ -161,7 +161,7 @@ test('review: each high finding is judged on its own line', (t) => {
   for (const text of blocked) {
     repo.setStage('review');
     repo.file('review.md', AXES + text);
-    fails(repo.run(['done', 'review', '--result', 'review.md']), /review still has open high findings/);
+    fails(repo.run(['done', 'review', '--result', 'review.md']), /no open high findings/);
   }
   for (const text of [
     'no findings tagged high\n',
@@ -179,12 +179,12 @@ test('verify: runs every tier and needs a non-empty evidence bundle', (t) => {
   const { repo, id } = withRun(t);
   repo.setStage('verify');
   repo.config({ commands: { unit: 'exit 0', lint: 'exit 0', complexity: '', e2e: 'exit 4', a11y: '' } });
-  fails(repo.run(['done', 'verify']), /e2e failed \(exit 4\)/);
+  fails(repo.run(['done', 'verify']), /e2e tier: found exit 4/);
   repo.config({ commands: { e2e: '' } });
-  fails(repo.run(['done', 'verify']), /missing evidence bundle: .*runs\/.*\/evidence/);
+  fails(repo.run(['done', 'verify']), /evidence bundle exists: found no .*runs\/.*\/evidence/);
   const evidence = path.join(repo.wfDir, 'runs', id, 'evidence');
   fs.mkdirSync(evidence, { recursive: true });
-  fails(repo.run(['done', 'verify']), /evidence directory is empty/);
+  fails(repo.run(['done', 'verify']), /evidence bundle has files: found an empty directory/);
   fs.writeFileSync(path.join(evidence, 'shot.png'), 'x');
   assert.equal(repo.run(['done', 'verify']).status, 0);
   assert.equal(repo.state().current.stage, 'gate_final');
@@ -207,10 +207,10 @@ const PR_URL = 'https://github.com/acme/app/pull/12';
 test('pr: result must be a GitHub PR URL and there must be a commit since the baseline', (t) => {
   const { repo } = withRun(t);
   repo.setStage('pr');
-  fails(repo.run(['done', 'pr']), /pr result must be the GitHub PR URL/);
-  fails(repo.run(['done', 'pr', '--result', 'abc123']), /pr result must be the GitHub PR URL/);
-  fails(repo.run(['done', 'pr', '--result', 'https://gerrit.example.com/c/1']), /pr result must be the GitHub PR URL/);
-  fails(repo.run(['done', 'pr', '--result', PR_URL]), /expected at least 1 commit since [0-9a-f]{40}, found 0/);
+  fails(repo.run(['done', 'pr']), /pr result is the PR URL/);
+  fails(repo.run(['done', 'pr', '--result', 'abc123']), /pr result is the PR URL/);
+  fails(repo.run(['done', 'pr', '--result', 'https://gerrit.example.com/c/1']), /pr result is the PR URL/);
+  fails(repo.run(['done', 'pr', '--result', PR_URL]), /at least one commit: found 0 since [0-9a-f]{40}/);
   repo.commit('one');
   repo.commit('two');
   assert.equal(repo.run(['done', 'pr', '--result', PR_URL]).status, 0);

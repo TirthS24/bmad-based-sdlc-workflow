@@ -213,7 +213,7 @@ test('CLI usage and unknown commands', (t) => {
   const repo = fresh(t);
   const none = repo.run([]);
   assert.equal(none.status, 1);
-  assert.match(none.stdout, /^usage: wf\.mjs <init\|gate-check\|ci-check\|login\|logout\|whoami\|sync\|report-failure\|doctor\|adr\|brief\|goto\|escalation\|run\|status\|done\|tickets\|agent\|approve\|reject\|pr\|verify\|guard\|log\|prune\|abort\|pause\|resume> \[args\]$/m);
+  assert.match(none.stdout, /^usage: wf\.mjs <init\|gate-check\|ci-check\|login\|logout\|whoami\|sync\|report-failure\|doctor\|adr\|brief\|goto\|escalation\|run\|status\|done\|check\|tickets\|agent\|approve\|reject\|pr\|verify\|guard\|log\|prune\|abort\|pause\|resume> \[args\]$/m);
   assert.equal(repo.run(['help']).status, 0);
   assert.equal(repo.run(['--help']).status, 0);
   const bad = repo.run(['frobnicate']);

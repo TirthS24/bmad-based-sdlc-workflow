@@ -2,6 +2,7 @@
 // artifact passes its check, and never over a gate that has not been approved.
 import { appendEvent, die, loadState, loadWorkflow, saveState } from './io.mjs';
 import { checkFeasibility, checkPlanning } from './postconditions.mjs';
+import { formatProblems } from './problems.mjs';
 import { rewind } from './rewind.mjs';
 import { fillAction, formatStatus } from './state.mjs';
 
@@ -29,8 +30,8 @@ export function cmdGoto(target) {
       } else if (state.stages[id]?.status !== 'done') {
         const check = FILE_CHECKS[id];
         if (!check) die(`${id} has not been done and cannot be jumped over`);
-        const err = check(state);
-        if (err) die(`cannot jump over ${id}: ${err}`);
+        const problems = check(state);
+        if (problems.length) die(`cannot jump over ${id}:\n${formatProblems(problems)}`);
         state.stages[id] = { status: 'done', result: 'goto', finished_at: at };
       }
     }

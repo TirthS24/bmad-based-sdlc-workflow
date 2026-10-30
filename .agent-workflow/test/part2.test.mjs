@@ -69,14 +69,14 @@ test('doctor: each kind of inconsistency is reported', (t) => {
 
 test('goto: forward over a checked artifact stops at the next gate and never skips one', (t) => {
   const { repo, id } = withRun(t);
-  fails(repo.run(['goto', 'feasibility']), /cannot jump over planning: missing/);
+  fails(repo.run(['goto', 'feasibility']), /cannot jump over planning:\n✗ SRS\.md exists/);
   repo.seedPlanning(id);
   fails(repo.run(['goto', 'feasibility']), /gate_spec is not approved/);
   assert.equal(repo.run(['goto', 'gate_spec']).status, 0);
   assert.equal(repo.state().current.stage, 'gate_spec');
   assert.equal(repo.state().stages.planning.result, 'goto');
   assert.equal(repo.run(['approve', 'gate_spec']).status, 0);
-  fails(repo.run(['goto', 'tests']), /cannot jump over feasibility: missing/);
+  fails(repo.run(['goto', 'tests']), /cannot jump over feasibility:\n✗ approach\.md exists/);
   repo.file(`specs/spec-${id}/approach.md`, VALID_APPROACH);
   fails(repo.run(['goto', 'tests']), /gate_approach is not approved/);
   assert.ok(repo.events().some((e) => e.type === 'goto' && e.direction === 'forward'));
@@ -228,7 +228,7 @@ test('planning: needs a Non-goals section', (t) => {
   const { repo, id } = withRun(t);
   repo.seedPlanning(id);
   repo.file(`specs/spec-${id}/SRS.md`, VALID_SRS.replace(/## 6 Non-goals[\s\S]*## 7 Traceability/, '## 7 Traceability'));
-  fails(repo.run(['done', 'planning']), /SRS\.md needs a Non-goals section|missing section heading matching.*Non-goals/);
+  fails(repo.run(['done', 'planning']), /Non-goals section: found no Non-goals heading/);
 });
 
 test('planning: research.md needs its three groups and a URL on every Sourced claim', (t) => {
@@ -236,9 +236,9 @@ test('planning: research.md needs its three groups and a URL on every Sourced cl
   repo.seedPlanning(id);
   const r = `specs/spec-${id}/research.md`;
   repo.file(r, '## Sourced\n- a claim\n');
-  fails(repo.run(['done', 'planning']), /research\.md needs a Inferred section/);
+  fails(repo.run(['done', 'planning']), /research\.md Inferred section: found no such heading/);
   repo.file(r, '## Sourced\n- a claim\n## Inferred\n- x\n## Unknown\n- y\n');
-  fails(repo.run(['done', 'planning']), /Sourced claim has no URL: - a claim/);
+  fails(repo.run(['done', 'planning']), /research\.md Sourced claims cite a URL: found no URL in "- a claim/);
   repo.file(r, '## Sourced\n- a claim https://example.com (2026-10-28)\n## Inferred\n- x\n## Unknown\n- y\n');
   assert.equal(repo.run(['done', 'planning']).status, 0);
 });
@@ -250,7 +250,7 @@ test('feasibility: needs decision, non-functional, risks and rollback', (t) => {
   const base = '# Approach\nVerdict: as-is\n## A\n## B\none commit\n';
   for (const part of ['Decision', 'Non-functional', 'Risks', 'Rollback']) {
     repo.file(p, base + ADR.replace(new RegExp(`## ${part}\\n[^#]*`), ''));
-    fails(repo.run(['done', 'feasibility']), new RegExp(`approach\\.md needs a ${part} section`));
+    fails(repo.run(['done', 'feasibility']), new RegExp(`${part} section: found no such heading`));
   }
   repo.file(p, base + ADR);
   assert.equal(repo.run(['done', 'feasibility']).status, 0);
@@ -260,9 +260,9 @@ test('review: needs a section per axis and a severity tag on every finding', (t)
   const { repo } = withRun(t);
   repo.setStage('review');
   repo.file('review.md', '## Standards\nopen: 0\n');
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review\.md needs a section for Spec conformance/);
+  fails(repo.run(['done', 'review', '--result', 'review.md']), /review section Spec conformance: found no such heading/);
   repo.file('review.md', `${AXES}- src/a.py:3 - rename this\n`);
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review finding has no severity tag: - src\/a\.py:3/);
+  fails(repo.run(['done', 'review', '--result', 'review.md']), /review finding severity: found "- src\/a\.py:3/);
   repo.file('review.md', `${AXES}- [low] src/a.py:3 - rename this\n`);
   assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0);
 });
@@ -320,4 +320,16 @@ test('brief: gate_tests lists the frozen product tests', (t) => {
   const out = repo.run(['brief']).stdout;
   assert.match(out, /- E2E\/tests\/a\.spec\.ts \(1 bytes/);
   assert.match(out, /- freeze_hash: f{64}/);
+});
+
+test('check: prints every problem with its rule and does not advance the stage', (t) => {
+  const { repo, id } = withRun(t);
+  const res = repo.run(['check', 'planning']);
+  fails(res, /SRS\.md exists: found no SRS\.md/);
+  const lines = res.stderr.split('\n').filter((l) => l.startsWith('✗'));
+  assert.ok(lines.length >= 3, res.stderr);
+  assert.match(res.stderr, /grill questions file/);
+  assert.match(res.stderr, /ticket files/);
+  assert.equal(repo.state().current.stage, 'planning');
+  assert.ok(id);
 });
