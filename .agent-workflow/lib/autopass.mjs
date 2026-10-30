@@ -43,7 +43,7 @@ const CONDITIONS = {
     const problems = checkFeasibility(state);
     if (problems.length) return no(`approach checks fail: ${problems[0].rule} (${problems[0].found})`);
     const text = readText(path.join(specDir(state), 'approach.md')) || '';
-    const verdict = (/\b(as-is|with-changes|not-satisfiable)\b/i.exec(text)?.[1] || 'missing').toLowerCase();
+    const verdict = (/^\s*(?:[-*]\s*)?\**verdict\**\s*:\s*(as-is|with-changes|not-satisfiable)\b/im.exec(text)?.[1] || 'missing').toLowerCase();
     if (!['as-is', 'with-changes'].includes(verdict)) return no(`verdict is ${verdict}`);
     const block = decisionBlock(text);
     if (!block) return no('no decision block under the Decision heading');
@@ -56,6 +56,8 @@ const CONDITIONS = {
     }
     const files = (block.files || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (!files.length) return no('no files listed in the decision block');
+    const unsafe = files.find((f) => f.startsWith('/') || f.split('/').includes('..'));
+    if (unsafe) return no(`unsafe path in files: ${unsafe}`);
     const writes = effectiveWrites('implement', state, ctx.workflow, ctx.config);
     const outside = files.filter((f) => !writesAllowed(sample(f), writes) || matchesAnyGlob(sample(f), productGlobs(ctx.config)));
     if (outside.length) return no(`files outside scope: ${outside.join(', ')}`);
@@ -100,8 +102,12 @@ export function evaluateAuto(gate, state, workflow, config) {
   }
   const check = CONDITIONS[condition];
   if (!check) return { passed: false, condition, reason: `unknown condition ${condition}` };
-  const r = check(state, { workflow, config, profile });
-  return { passed: r.ok, condition, reason: r.reason, approach: r.approach };
+  try {
+    const r = check(state, { workflow, config, profile });
+    return { passed: r.ok, condition, reason: r.reason, approach: r.approach };
+  } catch (err) {
+    return { passed: false, condition, reason: `could not evaluate: ${err.message}` };
+  }
 }
 
 function recordAuto(state, gate, d) {

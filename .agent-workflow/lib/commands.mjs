@@ -156,7 +156,9 @@ export function cmdCheck(stage, resultPath) {
   // Preview only: would the next gate auto-pass if it were reached now? Nothing is recorded.
   const workflow = loadWorkflow();
   const gate = peekNextGate(target, state, workflow);
-  if (stageById(workflow, gate)?.executor === 'human' && profileOf(state, workflow).auto?.[gate]) {
+  // tests and review record their inputs only when done, so a preview for them would be wrong now.
+  const previewable = !['tests', 'review'].includes(target);
+  if (previewable && stageById(workflow, gate)?.executor === 'human' && profileOf(state, workflow).auto?.[gate]) {
     const d = evaluateAuto(gate, state, workflow, loadConfig());
     process.stdout.write(`next gate ${gate}: auto-pass ${d.passed ? 'would apply' : 'would not apply'} (${d.reason})\n`);
   }
@@ -220,9 +222,9 @@ export function cmdApprove(gate, approach) {
     approach_hash: fileHashIfExists(`${dir}/approach.md`),
     tickets_hash: ticketsHash(state),
   };
+  appendEvent('approve', { gate, by: 'human', ...(gate === 'gate_approach' ? { approach } : {}) });
   const notes = advanceAfter(gate, state, workflow, loadConfig());
   saveState(state);
-  appendEvent('approve', { gate, by: 'human', ...(gate === 'gate_approach' ? { approach } : {}) });
   for (const n of notes) process.stdout.write(`${n}\n`);
   process.stdout.write(`${formatStatus(state)}\n`);
 }
