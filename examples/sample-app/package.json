@@ -1,0 +1,9 @@
+{
+  "name": "wf-sample-app",
+  "private": true,
+  "description": "Tiny app used to try the workflow end to end. Zero runtime dependencies.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "devDependencies": { "@playwright/test": "1.49.1" }
+}
