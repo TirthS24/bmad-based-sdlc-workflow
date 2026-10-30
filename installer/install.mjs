@@ -48,12 +48,16 @@ const CLAUDE_TOOLS = {
 // Rewrites an agent's frontmatter for Claude Code: drops `readonly` and sets the tool lists above.
 // Agents not listed (implementer, verifier, test-architect) pass through unchanged.
 export function translateAgent(text, name) {
-  const m = /^---\n([\s\S]*?)\n---\n?/.exec(text);
   const spec = CLAUDE_TOOLS[name];
-  if (!m || !spec) return text;
-  const kept = m[1].split('\n').filter((l) => !/^(readonly|tools|disallowedTools):/.test(l));
+  if (!spec) return text;
+  // Normalise line endings, so a CRLF file is translated like an LF one; keep the output LF.
+  const normal = text.replace(/\r\n/g, "\n");
+  const m = /^---\n([\s\S]*?)\n---\n?/.exec(normal);
+  // Failing open here would leave a reader with every tool, so a listed agent without frontmatter is an error.
+  if (!m) throw new Error(`agent ${name} has no frontmatter; cannot set its tool list`);
+  const kept = m[1].split("\n").filter((l) => !/^(readonly|tools|disallowedTools):/.test(l));
   const added = Object.entries(spec).map(([k, v]) => `${k}: ${v}`);
-  return `---\n${[...kept, ...added].join('\n')}\n---\n${text.slice(m[0].length)}`;
+  return `---\n${[...kept, ...added].join("\n")}\n---\n${normal.slice(m[0].length)}`;
 }
 const readJson = (f, d = null) => { try { return JSON.parse(read(f)); } catch { return d; } };
 const writeJson = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, `${JSON.stringify(o, null, 2)}\n`); };

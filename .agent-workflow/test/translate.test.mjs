@@ -36,3 +36,21 @@ test('agents not listed (the implementer) pass through unchanged', () => {
   const text = source('implementer');
   assert.equal(translateAgent(text, 'implementer'), text);
 });
+
+test('CRLF line endings translate like LF', () => {
+  const lf = source('requirements-griller');
+  const out = translateAgent(lf.replace(/\n/g, '\r\n'), 'requirements-griller');
+  assert.equal(toolsOf(out), 'Read, Grep, Glob');
+  assert.doesNotMatch(out, /readonly:/);
+});
+
+test('a listed agent without frontmatter is an error, not an unchanged file', () => {
+  assert.throws(() => translateAgent('no frontmatter here\n', 'requirements-griller'), /has no frontmatter/);
+});
+
+test('a description containing a colon survives the translation', () => {
+  const text = '---\nname: requirements-griller\ndescription: Planning stage: questions as JSON.\nreadonly: true\n---\nbody\n';
+  const out = translateAgent(text, 'requirements-griller');
+  assert.match(out, /^description: Planning stage: questions as JSON\.$/m);
+  assert.doesNotMatch(out, /readonly:/);
+});

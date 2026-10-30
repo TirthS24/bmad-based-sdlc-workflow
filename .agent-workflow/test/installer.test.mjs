@@ -230,3 +230,20 @@ test('ci-check: a pull request that edits a protected workflow file is refused',
   assert.equal(res.status, 1);
   assert.match(res.stderr, /changes a protected workflow file: \.agent-workflow\/workflow\.json/);
 });
+
+// Stage 10: what the Claude Code install writes into .claude/agents (the translated tool lists).
+test('claude-code install: the grill helper has no Write, Edit or Bash, and the cursor install is byte-identical', (t) => {
+  const cc = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-cc-'));
+  const cur = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-cur-'));
+  t.after(() => { fs.rmSync(cc, { recursive: true, force: true }); fs.rmSync(cur, { recursive: true, force: true }); });
+  for (const d of [cc, cur]) spawnSync('git', ['init', '-q'], { cwd: d });
+  assert.equal(install(cc, 'claude-code').status, 0);
+  assert.equal(install(cur, 'cursor').status, 0);
+  const griller = fs.readFileSync(path.join(cc, '.claude', 'agents', 'requirements-griller.md'), 'utf8');
+  const tools = /^tools:\s*(.*)$/m.exec(griller)?.[1] ?? '';
+  assert.doesNotMatch(tools, /Write|Edit|Bash/);
+  assert.doesNotMatch(griller, /^readonly:/m);
+  const src = fs.readFileSync(path.join(ROOT, '.cursor', 'agents', 'implementer.md'), 'utf8');
+  assert.equal(fs.readFileSync(path.join(cur, '.cursor', 'agents', 'implementer.md'), 'utf8'), src);
+  assert.equal(fs.readFileSync(path.join(cc, '.claude', 'agents', 'implementer.md'), 'utf8'), src, 'unlisted agents are not translated');
+});
