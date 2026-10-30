@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { readText } from './io.mjs';
+import { loadWorkflow, readText } from './io.mjs';
+import { profileOf } from './profiles.mjs';
 import { problem } from './problems.mjs';
 import { REPO_ROOT, posixRel, repoRoot, specDir } from './paths.mjs';
 
@@ -218,6 +219,9 @@ export function checkTickets(state, srsText) {
     if (!coveredReq.has(id)) problems.push(problem('every REQ has a ticket', `no ticket lists ${id}`, `a ticket whose "requirements" contains ${id}`, `"requirements": ["${id}"]`));
     if (!prdByReq.get(id)?.length) problems.push(problem('every REQ has a PRD test case', `no PRD-n.m test case for ${id}`, `a test case id PRD-${id.slice(4)}.1`, `"id": "PRD-${id.slice(4)}.1"`));
   }
+  const minAuto = profileOf(state, loadWorkflow()).min_automated_test_cases || 0;
+  const automated = loaded.reduce((n, { data }) => n + (data?.acceptance_criteria || []).reduce((m, ac) => m + (ac.test_cases || []).filter((tc) => tc.automation === 'automated').length, 0), 0);
+  if (automated < minAuto) problems.push(problem('automated test cases', `${automated}`, `at least ${minAuto} automated test case(s)`, '"automation": "automated"'));
   return problems;
 }
 

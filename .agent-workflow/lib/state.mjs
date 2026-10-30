@@ -1,6 +1,6 @@
 // Run state shape, next-action text and the status report.
 import { loadConfig, loadWorkflow, stageById } from './io.mjs';
-import { expandWritePatterns } from './globs.mjs';
+import { effectiveWrites, profileName } from './profiles.mjs';
 
 export const NEXT_ACTION = {
   planning: 'Run /wf-start. … Then: node .agent-workflow/wf.mjs done planning --result specs/spec-<id>/SRS.md',
@@ -49,7 +49,7 @@ function writeHint(state) {
   const wf = loadWorkflow();
   const cfg = loadConfig();
   const stg = stageById(wf, state.current.stage);
-  const patterns = expandWritePatterns(stg?.writes || [], cfg, state.run.id);
+  const patterns = effectiveWrites(state.current.stage, state, wf, cfg);
   const allow = patterns.filter((p) => !p.startsWith('!')).join(', ') || '(none)';
   const block = patterns.filter((p) => p.startsWith('!')).map((p) => p.slice(1)).join(', ');
   const frozen = state.current.stage === 'implement' || state.current.stage === 'review' ? ' frozen-tests' : '';
@@ -71,6 +71,7 @@ export function formatStatus(state) {
       : state.loops.verify_fix.round;
   const lines = [
     `run: ${state.run.id}`,
+    `profile: ${profileName(state)}`,
     `branch: ${state.run.branch}`,
     `stage: ${state.current.stage}`,
     `attempt: ${state.current.attempt}`,

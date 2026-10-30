@@ -184,12 +184,12 @@ test('verify: runs every tier and needs a non-empty evidence bundle', (t) => {
   repo.config({ commands: { unit: 'exit 0', lint: 'exit 0', complexity: '', e2e: 'exit 4', a11y: '' } });
   fails(repo.run(['done', 'verify']), /e2e tier: found exit 4/);
   repo.config({ commands: { e2e: '' } });
-  fails(repo.run(['done', 'verify']), /evidence bundle exists: found no .*runs\/.*\/evidence/);
+  // tiers.md is always written, so the default evidence folder is never empty; an explicit path must exist.
+  fails(repo.run(['done', 'verify', '--result', runFile(repo, 'missing')]), /evidence bundle exists: found no .*missing/);
   const evidence = path.join(repo.wfDir, 'runs', id, 'evidence');
-  fs.mkdirSync(evidence, { recursive: true });
-  fails(repo.run(['done', 'verify']), /evidence bundle has files: found an empty directory/);
   fs.writeFileSync(path.join(evidence, 'shot.png'), 'x');
   assertOk(repo.run(['done', 'verify']));
+  assert.match(fs.readFileSync(path.join(evidence, 'tiers.md'), 'utf8'), /unit: ran, exit 0/);
   assert.equal(repo.state().current.stage, 'gate_final');
   assert.match(repo.state().current.next_action, /^Ask the human to read the evidence bundle/);
   assert.deepEqual(repo.state().stages.verify.tiers.map((t) => [t.tier, t.skipped, t.code]), [

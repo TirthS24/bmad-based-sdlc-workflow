@@ -1,3 +1,4 @@
+import { rejectTarget } from './profiles.mjs';
 // `wf escalation list|retry|reject|abort`: the human's way out of a loop-cap or stuck-loop stop.
 import { appendEvent, die, loadState, loadWorkflow, saveState } from './io.mjs';
 import { cmdAbort } from './commands.mjs';
@@ -45,7 +46,8 @@ export function cmdEscalation(action, note) {
       .find((id) => workflow.stages.find((s) => s.id === id).executor === 'human');
     if (!gate) die('no earlier gate to send the run back to');
     const gateStage = workflow.stages.find((s) => s.id === gate);
-    const target = gateStage.on_reject || workflow.stages.find((s) => s.next === gate).id;
+    const target = rejectTarget(gate, state, workflow);
+    if (!target) die('no stage to send the run back to');
     const at = new Date().toISOString();
     state.rejections.push({ gate, reason: `escalation: ${String(note).trim()}`, at });
     const count = state.rejections.filter((r) => r.gate === gate).length;

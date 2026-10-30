@@ -12,7 +12,8 @@
       "wf-resume",
       "wf-unblock",
       "wf-onboard",
-      "wf-jira-tickets"
+      "wf-jira-tickets",
+      "wf-profile"
     ],
     "conductor": [
       "wf-start",
@@ -208,7 +209,8 @@
       "wf-resume",
       "wf-abort",
       "wf-unblock",
-      "wf-goto"
+      "wf-goto",
+      "wf-profile"
     ]
   }
 }

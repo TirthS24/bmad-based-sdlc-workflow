@@ -2,7 +2,8 @@
 // empty list means the stage passed.
 import fs from 'node:fs';
 import path from 'node:path';
-import { git, loadConfig, readText } from './io.mjs';
+import { git, loadConfig, loadWorkflow, readText } from './io.mjs';
+import { profileOf } from './profiles.mjs';
 import { PATHS, REPO_ROOT, posixRel, specDir } from './paths.mjs';
 import { checkE2eCoverage, e2eNotConfigured, e2eSummary, readE2eReport } from './e2e.mjs';
 import { problem } from './problems.mjs';
@@ -58,8 +59,9 @@ export function checkFeasibility(state) {
   // The decision-record sections are headings too, but they are not approaches.
   const approaches = (text.match(/^#{2,3}\s+.+/gm) || []).filter((h) => !/^#{2,3}\s+[\W\d]*(Decision|Non-functional|Risks|Rollback)\b/i.test(h));
   const named = (text.match(/\bapproach\s+[ABC1-3]\b/gi) || []).length;
-  if (approaches.length < 2 && named < 2) {
-    problems.push(problem('two approaches', `${Math.max(approaches.length, named)} approach headings`, 'at least 2 approaches', '### Approach A: extend the existing service'));
+  const min = profileOf(state, loadWorkflow()).min_approaches ?? 2;
+  if (approaches.length < min && named < min) {
+    problems.push(problem('two approaches', `${Math.max(approaches.length, named)} approach headings`, `at least ${min} approaches`, '### Approach A: extend the existing service'));
   }
   if (!/one commit|single-commit|split/i.test(text)) {
     problems.push(problem('single-commit fit line', 'no such line', 'a line saying the change fits one commit, or how it splits', 'Fits one commit: yes'));
@@ -106,14 +108,17 @@ const HIGH_FINDING = /^\s*[-*]\s*(?:\[\s*high\s*\]|\*{0,2}high\*{0,2}\s*[:—-])
 const RESOLVED = /\[\s*resolved\s*\]/i;
 
 const AXES = ['Standards', 'Spec conformance', 'Approach conformance', 'Test quality'];
+// Derived from the profile: "Approach conformance" is N/A without feasibility, "Test quality" without tests.
+const NA_WHEN_SKIPPED = { 'Approach conformance': 'feasibility', 'Test quality': 'tests' };
+const requiredAxes = (skipped) => AXES.filter((a) => !(NA_WHEN_SKIPPED[a] && skipped.includes(NA_WHEN_SKIPPED[a])));
 const TAGGED = /^\s*[-*]\s*(\[\s*(low|medium|high|decision-needed)\s*\]|\*{0,2}(low|medium|high|decision-needed)\*{0,2}\s*[:—-])/i;
 
-export function checkReviewToVerify(resultPath) {
+export function checkReviewToVerify(resultPath, skipped = []) {
   if (!resultPath) return [problem('review output path given', 'no --result', '--result <review file>', 'wf check review --result review.md')];
   const text = readText(resultPath);
   if (text == null) return [problem('review output exists', `no file at ${resultPath}`, 'the code-reviewer output path', 'review.md')];
   const problems = [];
-  for (const axis of AXES) {
+  for (const axis of requiredAxes(skipped)) {
     if (!new RegExp(`^#{1,4}\\s*\\**${axis}\\b`, 'im').test(text)) {
       problems.push(problem(`review section ${axis}`, 'no such heading', `a "${axis}" heading`, `## ${axis}`));
     }
@@ -133,14 +138,25 @@ export function checkReviewToVerify(resultPath) {
 export const lastVerify = { tiers: [] };
 
 // dryRun (used by `wf check`) re-runs the tiers but writes nothing and leaves lastVerify alone.
+// The evidence bundle always has tiers.md, so a profile with no automated checks still has evidence.
+function writeTiersEvidence(state, results) {
+  const dir = path.join(PATHS.runs, state.run.id, 'evidence');
+  fs.mkdirSync(dir, { recursive: true });
+  const lines = results.map((r) => `- ${r.tier}: ${r.skipped ? 'skipped (no command configured)' : `ran, exit ${r.code}`}`);
+  const note = results.every((r) => r.skipped) ? '\nNo automated checks configured for this profile.\n' : '';
+  fs.writeFileSync(path.join(dir, 'tiers.md'), `# Verification tiers\n\n${lines.join('\n') || '- none'}\n${note}`);
+}
+
 export function checkVerifyToGate(state, resultPath, { dryRun = false } = {}) {
-  const missing = e2eNotConfigured(state, loadConfig());
+  const tiers = profileOf(state, loadWorkflow()).verify_tiers ?? ALL_TIERS;
+  const missing = tiers.includes('e2e') ? e2eNotConfigured(state, loadConfig()) : null;
   if (missing) return [problem('e2e command configured', missing, 'commands.e2e in config.json', 'npx playwright test --reporter=list,json')];
-  const results = runVerifyTiers(ALL_TIERS);
+  const results = runVerifyTiers(tiers);
+  if (!dryRun) writeTiersEvidence(state, results);
   if (!dryRun) lastVerify.tiers = results.map(({ tier, skipped, code }) => ({ tier, skipped, code }));
   const failed = results.find((r) => !r.skipped && r.code !== 0);
   if (failed) return [problem(`${failed.tier} tier`, `exit ${failed.code}`, 'exit 0', `npm run ${failed.tier}`)];
-  if (!results.find((r) => r.tier === 'e2e').skipped) {
+  if (tiers.includes('e2e') && !results.find((r) => r.tier === 'e2e').skipped) {
     const tests = readE2eReport(e2eReportPath());
     const err = checkE2eCoverage(state, tests);
     if (err) return [problem('e2e covers every automated scenario', err, 'a passing test for each PRD-n.m scenario', 'PRD-1.1 REQ-1 ...')];
@@ -189,7 +205,7 @@ export function postcondition(fromStage, state, resultPath, opts = {}) {
     case 'implement':
       return checkImplementToReview();
     case 'review':
-      return checkReviewToVerify(resultPath);
+      return checkReviewToVerify(resultPath, profileOf(state, loadWorkflow()).skip || []);
     case 'verify':
       return checkVerifyToGate(state, resultPath, opts);
     case 'pr':

@@ -2,7 +2,8 @@
 //   { permission: 'allow' | 'deny', message?, followup? }
 // Rendering the decision for a specific harness is the adapter's job.
 import { appendEvent, git, saveState, stageById } from './io.mjs';
-import { expandWritePatterns, matchesAnyGlob, productGlobs, writesAllowed } from './globs.mjs';
+import { matchesAnyGlob, productGlobs, writesAllowed } from './globs.mjs';
+import { effectiveWrites, profileOf } from './profiles.mjs';
 import { posixRel } from './paths.mjs';
 import { readE2eReport } from './e2e.mjs';
 import { combinedOutput, e2eReportPath, runVerifyTiers } from './verify.mjs';
@@ -36,7 +37,7 @@ export function guardPreToolUse(input, state, workflow, config) {
   }
   if (!state?.run?.id) return allow();
   const stg = stageById(workflow, state.current.stage);
-  const patterns = expandWritePatterns(stg?.writes || [], config, state.run.id);
+  const patterns = effectiveWrites(state.current.stage, state, workflow, config);
   if ((state.current.stage === 'implement' || state.current.stage === 'review')
     && matchesAnyGlob(rel, productGlobs(config))) {
     return deny(`frozen tests: ${rel} is in product_test_globs for stage ${state.current.stage}`);
@@ -77,11 +78,11 @@ function sameSet(a, b) {
   return a.every((v, i) => v === b[i]);
 }
 
-function implementStop(input, state, config) {
+function implementStop(input, state, config, workflow) {
   const loopCount = input.loopCount ?? 0;
   if (!state?.run?.id) return allow();
   if (state.current.stage !== 'implement') return allow();
-  const cap = config.loop_caps?.implement ?? 5;
+  const cap = profileOf(state, workflow).loop_caps?.implement ?? config.loop_caps?.implement ?? 5;
   const { failed, names } = failingNamesFromVerify();
   if (!failed) return allow();
   const last = state.loops.implement.last_failing || [];
@@ -114,7 +115,7 @@ export function allowedScope(state, workflow, config) {
   const patterns = [];
   for (const stg of workflow.stages) {
     // Negations are for the current stage only (frozen tests), so they are not unioned.
-    patterns.push(...expandWritePatterns(stg.writes || [], config, state.run.id).filter((p) => !p.startsWith('!')));
+    patterns.push(...effectiveWrites(stg.id, state, workflow, config).filter((p) => !p.startsWith('!')));
     if (stg.id === state.current.stage) break;
   }
   return [...patterns, `specs/spec-${state.run.id}/**`, `.agent-workflow/runs/${state.run.id}/**`];
@@ -143,7 +144,7 @@ export function scopeViolations(state, workflow, config) {
 
 // Stop hook: a stray write is reported in the same turn. It adds to the follow-up and never blocks.
 export function guardStop(input, state, config, workflow) {
-  const res = implementStop(input, state, config);
+  const res = implementStop(input, state, config, workflow);
   let out;
   try {
     out = scopeViolations(state, workflow, config);

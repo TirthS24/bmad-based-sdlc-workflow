@@ -104,5 +104,68 @@
     ".agent-workflow/state.json",
     ".agent-workflow/workflow.json",
     ".agent-workflow/project.json"
-  ]
+  ],
+  "profiles": {
+    "full": {
+      "adr": true
+    },
+    "pm": {
+      "skip": [
+        "feasibility",
+        "gate_approach",
+        "tests",
+        "gate_tests",
+        "implement",
+        "review",
+        "gate_review",
+        "verify"
+      ],
+      "auto": {
+        "gate_final": "specs_only_unchanged"
+      },
+      "pr_paths": [
+        "specs/spec-<id>/**"
+      ],
+      "adr": false
+    },
+    "dev": {
+      "auto": {
+        "gate_spec": "planning_clean",
+        "gate_approach": "approach_low_risk",
+        "gate_tests": "red_for_right_reason",
+        "gate_review": "no_open_high_or_decision"
+      },
+      "min_approaches": 1,
+      "loop_caps": {
+        "grill": 2
+      },
+      "min_automated_test_cases": 1,
+      "adr": false
+    },
+    "docs": {
+      "skip": [
+        "feasibility",
+        "gate_approach",
+        "tests",
+        "gate_tests"
+      ],
+      "auto": {
+        "gate_review": "no_open_high_or_decision"
+      },
+      "writes": {
+        "implement": [
+          "<docs_globs>"
+        ],
+        "review": [
+          "<docs_globs>",
+          "<run_dir>"
+        ]
+      },
+      "verify_tiers": [
+        "docs_lint",
+        "links"
+      ],
+      "adr": false
+    }
+  }
 }

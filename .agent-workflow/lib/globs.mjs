@@ -33,12 +33,13 @@ export function expandWritePatterns(patterns, config, runId = '') {
   const out = [];
   const sets = {
     src_globs: config.src_globs || [],
+    docs_globs: config.docs_globs || [],
     test_globs: productGlobs(config),
     product_test_globs: productGlobs(config),
     unit_test_globs: unitGlobs(config),
   };
   for (const p of patterns) {
-    const token = /^(!?)<(test_globs|product_test_globs|unit_test_globs|src_globs)>$/.exec(p);
+    const token = /^(!?)<(test_globs|product_test_globs|unit_test_globs|src_globs|docs_globs)>$/.exec(p);
     if (token) {
       for (const g of sets[token[2]]) out.push(`${token[1]}${g}`);
     } else if (p === '<run_dir>') {

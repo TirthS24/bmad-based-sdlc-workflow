@@ -18,7 +18,9 @@
     "complexity": "",
     "seed": "",
     "e2e": "",
-    "a11y": ""
+    "a11y": "",
+    "docs_lint": "",
+    "links": ""
   },
   "surfaces": [
     "ui",
@@ -35,5 +37,9 @@
     "enabled": true,
     "server_url": "",
     "required": false
-  }
+  },
+  "docs_globs": [
+    "docs/**",
+    "**/*.md"
+  ]
 }

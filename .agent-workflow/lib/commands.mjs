@@ -3,7 +3,9 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { freezeHash } from './freeze.mjs';
-import { allowedScope, evaluate, scopeViolations } from './guards.mjs';
+import { allowedScope, changedFiles, evaluate, scopeViolations } from './guards.mjs';
+import { matchesAnyGlob } from './globs.mjs';
+import { DEFAULT_PROFILE, nextStage, profileName, profileNames, profileOf, rejectTarget } from './profiles.mjs';
 import {
   appendEvent, die, git, loadConfig, loadState, loadWorkflow, parseHookPayload,
   readJson, readStdin, readText, saveState, sha256File, stageById,
@@ -22,11 +24,15 @@ import {
 import { emptyState, fillAction, formatStatus } from './state.mjs';
 import { ALL_TIERS, runVerifyTiers } from './verify.mjs';
 
-export function cmdRun(source) {
+export function cmdRun(source, { profile } = {}) {
   const needLogin = loginProblem();
   if (needLogin) die(needLogin);
   if (loadState()?.run?.id) {
     die('a run is already active; /wf-abort or /wf-pause first');
+  }
+  const profileChosen = profile || DEFAULT_PROFILE;
+  if (!profileNames(loadWorkflow()).includes(profileChosen)) {
+    die(`unknown profile ${profileChosen} (one of: ${profileNames(loadWorkflow()).join(', ')})`);
   }
   const slug = String(source || 'adhoc')
     .toLowerCase()
@@ -51,6 +57,8 @@ export function cmdRun(source) {
   };
   fs.mkdirSync(specDir({ run }), { recursive: true });
   fs.mkdirSync(path.join(PATHS.runs, id), { recursive: true });
+  run.profile = profileChosen;
+  run.profile_changes = [];
   const state = emptyState(run, loadWorkflow());
   saveState(state);
   appendEvent('run', { id, source: run.source });
@@ -113,7 +121,7 @@ export function cmdDone(stage, resultPath) {
     finished_at: new Date().toISOString(),
   };
   if (stage === 'verify') state.stages.verify.tiers = lastVerify.tiers;
-  const next = stg.next;
+  const next = nextStage(stage, state, workflow);
   state.current.stage = next;
   state.current.attempt = 1;
   state.current.next_action = fillAction(next, state.run.id);
@@ -203,9 +211,10 @@ export function cmdApprove(gate, approach) {
     approach_hash: fileHashIfExists(`${dir}/approach.md`),
     tickets_hash: ticketsHash(state),
   };
-  state.current.stage = stg.next;
+  const next = nextStage(gate, state, workflow);
+  state.current.stage = next;
   state.current.attempt = 1;
-  state.current.next_action = fillAction(stg.next, state.run.id);
+  state.current.next_action = fillAction(next, state.run.id);
   saveState(state);
   appendEvent('approve', { gate, ...(gate === 'gate_approach' ? { approach } : {}) });
   process.stdout.write(`${formatStatus(state)}\n`);
@@ -217,7 +226,8 @@ export function cmdReject(gate, reason) {
   const workflow = loadWorkflow();
   const gateStage = humanGate(gate, workflow, state);
   if (!String(reason || '').trim()) die('reject requires --reason "<why>"');
-  const target = gateStage.on_reject || workflow.stages.find((s) => s.next === gate).id;
+  const target = rejectTarget(gate, state, workflow);
+  if (!target) die(`no stage to send the run back to from ${gate}`);
   const at = new Date().toISOString();
   state.rejections.push({ gate, reason: String(reason).trim(), at });
   const count = state.rejections.filter((r) => r.gate === gate).length;
@@ -255,8 +265,14 @@ export function cmdPr({ dryRun = false } = {}) {
   if (head !== state.run.branch) die(`HEAD is on ${head || '(unknown)'}, not the run branch ${state.run.branch}; check it out first`);
   const n = commitsSince(state.run.baseline_sha);
   if (n < 1) die(`no commits since ${state.run.baseline_sha}; commit the run files first`);
-  if (!dryRun && decisionRecord(state).length && !adrCommitted(state)) {
+  if (!dryRun && profileOf(state, loadWorkflow()).adr !== false && decisionRecord(state).length && !adrCommitted(state)) {
     die('run `node .agent-workflow/wf.mjs adr` and commit the docs/adr file it writes first (the decision record belongs in the PR)');
+  }
+  const profile = profileOf(state, loadWorkflow());
+  if (profile.pr_paths) {
+    const allowed = profile.pr_paths.map((g) => g.replace('<id>', state.run.id));
+    const outside = changedFiles(state).filter((rel) => !matchesAnyGlob(rel, allowed));
+    if (outside.length) die(`profile ${profile.name} allows only ${allowed.join(', ')} in the PR; outside: ${outside.join(', ')}`);
   }
   const push = git(['push', '-u', 'origin', state.run.branch]);
   if (push.status !== 0) die(`git push failed: ${(push.stderr || '').trim()}`);
@@ -280,7 +296,8 @@ export function cmdPr({ dryRun = false } = {}) {
 }
 
 export function cmdVerify() {
-  const results = runVerifyTiers(ALL_TIERS);
+  const state = loadState();
+  const results = runVerifyTiers(profileOf(state, loadWorkflow()).verify_tiers ?? ALL_TIERS);
   let worst = 0;
   for (const r of results) {
     const label = r.skipped ? 'skip' : r.code === 0 ? 'ok' : `fail(${r.code})`;
@@ -292,6 +309,27 @@ export function cmdVerify() {
     }
   }
   process.exit(worst);
+}
+
+// `wf profile <name>`: human-only. Allowed while planning runs or before gate_spec is approved.
+export function cmdProfile(name) {
+  const state = loadState();
+  if (!state?.run?.id) die('no active run');
+  const workflow = loadWorkflow();
+  if (!profileNames(workflow).includes(name)) die(`unknown profile ${name} (one of: ${profileNames(workflow).join(', ')})`);
+  if (state.gates.gate_spec?.status === 'approved') die('profile is fixed once gate_spec is approved');
+  if (!['planning', 'gate_spec'].includes(state.current.stage)) die(`profile can change only during planning or before gate_spec (now ${state.current.stage})`);
+  const from = profileName(state);
+  if (from === name) die(`already ${name}`);
+  const at = new Date().toISOString();
+  state.run.profile_changes = [...(state.run.profile_changes || []), { from, to: name, at }];
+  state.run.profile = name;
+  // Stages skipped under the old profile run again; the new profile re-marks what it skips.
+  for (const [id, s] of Object.entries(state.stages)) if (s.status === 'skipped') delete state.stages[id];
+  for (const [id, g] of Object.entries(state.gates)) if (g.status === 'skipped') state.gates[id] = { status: 'pending' };
+  saveState(state);
+  appendEvent('profile', { from, to: name });
+  process.stdout.write(`${formatStatus(state)}\n`);
 }
 
 // Hook entry point: stdin payload -> adapter -> core decision -> adapter response.

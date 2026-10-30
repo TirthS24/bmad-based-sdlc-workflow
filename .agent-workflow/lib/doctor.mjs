@@ -1,7 +1,7 @@
 // `wf doctor`: checks that the capability manifest, the skills, the agents and the rules agree.
 import fs from 'node:fs';
 import path from 'node:path';
-import { die, loadWorkflow, readJson } from './io.mjs';
+import { die, loadConfig, loadWorkflow, readJson } from './io.mjs';
 import { REPO_ROOT, WF_DIR } from './paths.mjs';
 
 const SKILL_ROOTS = ['.cursor/skills', '.agents/skills', '.claude/skills'];
@@ -105,6 +105,7 @@ export function doctor() {
       problems.push('telemetry: subagent_start events with no subagent_stop (hooks may be quiet; restart Cursor)');
     }
   }
+  problems.push(...profileProblems(workflow, loadConfig()));
   return problems;
 }
 
@@ -112,4 +113,36 @@ export function cmdDoctor() {
   const problems = doctor();
   if (problems.length) die(`doctor found ${problems.length} problem(s):\n- ${problems.join('\n- ')}`);
   process.stdout.write('doctor: capabilities consistent\n');
+}
+
+// Profile rules (profiles.mjs and workflow.json "profiles"). Each violation names the profile.
+const CONDITIONS = ['planning_clean', 'approach_low_risk', 'red_for_right_reason', 'no_open_high_or_decision', 'specs_only_unchanged'];
+const NEVER_SKIPPED = ['planning', 'gate_spec', 'gate_final', 'pr'];
+const KNOWN_TIERS = ['unit', 'lint', 'typecheck', 'format', 'complexity', 'e2e', 'a11y', 'docs_lint', 'links'];
+const WRITE_TOKEN = /^!?<(test_globs|product_test_globs|unit_test_globs|src_globs|docs_globs|run_dir)>$/;
+
+export function profileProblems(workflow) {
+  const out = [];
+  const stageIds = workflow.stages.map((s) => s.id);
+  const gateIds = workflow.stages.filter((s) => s.executor === 'human').map((s) => s.id);
+  for (const [name, p] of Object.entries(workflow.profiles || {})) {
+    const at = `profile ${name}`;
+    const skip = p.skip || [];
+    const auto = p.auto || {};
+    for (const id of skip) if (NEVER_SKIPPED.includes(id)) out.push(`${at}: ${id} cannot be skipped`);
+    if (name === 'full' && (skip.length || Object.keys(auto).length)) out.push('profile full must not skip or auto-pass anything');
+    for (const [gate, cond] of Object.entries(auto)) {
+      if (!gateIds.includes(gate)) out.push(`${at}: auto ${gate} is not a gate`);
+      else if (skip.includes(gate)) out.push(`${at}: auto ${gate} is also skipped`);
+      if (!CONDITIONS.includes(cond)) out.push(`${at}: ${gate} has unknown condition ${cond}`);
+      if (gate === 'gate_final' && cond !== 'specs_only_unchanged') out.push(`${at}: gate_final may only auto-pass under specs_only_unchanged`);
+      if (cond === 'specs_only_unchanged' && !p.pr_paths) out.push(`${at}: specs_only_unchanged needs pr_paths`);
+    }
+    for (const [stage, patterns] of Object.entries(p.writes || {})) {
+      if (!stageIds.includes(stage)) out.push(`${at}: writes for unknown stage ${stage}`);
+      for (const pat of patterns) if (/<[^>]*>/.test(pat) && !WRITE_TOKEN.test(pat)) out.push(`${at}: unknown write token ${pat}`);
+    }
+    for (const tier of p.verify_tiers || []) if (!KNOWN_TIERS.includes(tier)) out.push(`${at}: unknown verify tier ${tier}`);
+  }
+  return out;
 }

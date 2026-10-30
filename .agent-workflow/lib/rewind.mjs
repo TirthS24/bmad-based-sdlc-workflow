@@ -8,6 +8,7 @@ export function rewind(state, workflow, target, end = null) {
   const from = ids.indexOf(target);
   const to = end ? ids.indexOf(end) : ids.length;
   for (const id of ids.slice(from, to)) {
+    if (state.stages[id]?.status === 'skipped' || state.gates[id]?.status === 'skipped') continue;
     delete state.stages[id];
     if (state.gates[id]) state.gates[id] = { status: 'pending' };
   }
