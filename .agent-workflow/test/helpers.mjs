@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 // Test helpers: run wf.mjs against a throwaway git repo so tests never touch
 // the real state.json, events.jsonl or runs/.
 import { spawnSync } from 'node:child_process';
@@ -216,7 +217,7 @@ export function makeRepo() {
       return repo.state().run.id;
     },
     commit(msg = 'change') {
-      repo.file(`c-${Date.now()}-${Math.random()}.txt`, msg);
+      repo.file(`src/c-${Date.now()}-${Math.random()}.txt`, msg);
       git('add', '-A');
       git('commit', '-q', '-m', msg);
     },
@@ -271,3 +272,9 @@ export function fresh(t) {
   t.after(() => repo.cleanup());
   return repo;
 }
+
+// A file in the current run folder (where the review and verify artifacts go).
+export const runFile = (repo, name) => `.agent-workflow/runs/${repo.state().run.id}/${name}`;
+
+// Asserts a wf run succeeded, printing its stderr on failure.
+export const assertOk = (res) => assert.equal(res.status, 0, res.stderr || res.stdout);

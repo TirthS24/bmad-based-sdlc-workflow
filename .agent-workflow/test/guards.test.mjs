@@ -52,7 +52,7 @@ test('preToolUse: review freezes tests too, verify and gates write nothing', (t)
   expectAllow(repo.guard('preToolUse', edit('src/app.py')));
   for (const stage of ['verify', 'gate_spec', 'gate_final', 'pr']) {
     repo.setStage(stage);
-    expectDeny(repo.guard('preToolUse', edit('src/app.py')), new RegExp(`stage ${stage} cannot write src/app\\.py\\. Allowed: \\(none\\)`));
+    expectDeny(repo.guard('preToolUse', edit('src/app.py')), new RegExp(`stage ${stage} cannot write src/app\\.py\\. Allowed: (\\(none\\)|\\.agent-workflow\\/runs\\/)`));
   }
 });
 

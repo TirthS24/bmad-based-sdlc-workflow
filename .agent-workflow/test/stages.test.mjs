@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { ADR, AXES, VALID_APPROACH, VALID_SRS, VALID_SPEC, withRun } from './helpers.mjs';
+import { ADR, AXES, VALID_APPROACH, VALID_SRS, VALID_SPEC, withRun, runFile, assertOk } from './helpers.mjs';
 
 const fails = (res, re) => {
   assert.equal(res.status, 1, res.stdout);
@@ -73,7 +73,7 @@ test('feasibility: verdict, two approaches, single-commit line', (t) => {
   repo.file(p, `# Approach\nVerdict: as-is\n## A\n## B\n${ADR}`);
   fails(repo.run(['done', 'feasibility']), /single-commit fit line: found no such line/);
   repo.file(p, VALID_APPROACH);
-  assert.equal(repo.run(['done', 'feasibility', '--result', p]).status, 0);
+  assertOk(repo.run(['done', 'feasibility', '--result', p]));
   assert.equal(repo.state().current.stage, 'gate_approach');
 });
 
@@ -81,7 +81,7 @@ test('feasibility: two named approaches count even without headings', (t) => {
   const { repo, id } = withRun(t);
   repo.setStage('feasibility');
   repo.file(`specs/spec-${id}/approach.md`, `Verdict: as-is\nApproach A is small. Approach B is big. one commit.\n${ADR}`);
-  assert.equal(repo.run(['done', 'feasibility']).status, 0);
+  assertOk(repo.run(['done', 'feasibility']));
 });
 
 test('tests: new tests must fail and cite an id, then the freeze hash is stored', (t) => {
@@ -93,7 +93,7 @@ test('tests: new tests must fail and cite an id, then the freeze hash is stored'
   fails(repo.run(['done', 'tests']), /failures cite ids: found a failure with no REQ, TECH or PRD id/);
   repo.config({ commands: { unit: 'echo "FAILED REQ-1 happy"; exit 1' } });
   repo.file('tests/test_a.py', 'A');
-  assert.equal(repo.run(['done', 'tests', '--result', 'tests']).status, 0);
+  assertOk(repo.run(['done', 'tests', '--result', 'tests']));
   const s = repo.state();
   assert.equal(s.current.stage, 'gate_tests');
   assert.match(s.freeze.test_files_hash, /^[0-9a-f]{64}$/);
@@ -111,13 +111,16 @@ test('freeze hash follows test_globs content only', (t) => {
   repo.config({ commands: { unit: 'echo "FAILED TECH-x"; exit 1' } });
   const hashFor = () => {
     repo.setStage('tests');
-    assert.equal(repo.run(['done', 'tests']).status, 0);
+    assertOk(repo.run(['done', 'tests']));
     return repo.state().freeze.test_files_hash;
   };
   repo.file('tests/test_a.py', 'A');
   const h1 = hashFor();
   assert.equal(hashFor(), h1, 'same content, same hash');
   repo.file('src/app.py', 'unrelated');
+  repo.setStage('tests');
+  assert.match(repo.run(['done', 'tests']).stderr, /writes stay in scope: found src\/app\.py/);
+  fs.rmSync(path.join(repo.root, 'src/app.py'));
   assert.equal(hashFor(), h1, 'files outside test_globs do not matter');
   repo.file('tests/test_a.py', 'B');
   assert.notEqual(hashFor(), h1, 'edited test file changes the hash');
@@ -134,18 +137,18 @@ test('implement: unit and lint must pass', (t) => {
   repo.config({ commands: { unit: 'exit 0', lint: 'exit 2' } });
   fails(repo.run(['done', 'implement']), /lint tier: found exit 2/);
   repo.config({ commands: { unit: 'exit 0', lint: '' } });
-  assert.equal(repo.run(['done', 'implement']).status, 0);
+  assertOk(repo.run(['done', 'implement']));
   assert.equal(repo.state().current.stage, 'review');
 });
 
 test('review: open high findings block, decision-needed goes to the gate', (t) => {
   const { repo } = withRun(t);
   repo.setStage('review');
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review output exists: found no file at review\.md/);
-  repo.file('review.md', `${AXES}- [high] SQL injection in handler\n`);
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /no open high findings: found 1 open: - \[high\] SQL injection/);
-  repo.file('review.md', `${AXES}- [medium] rename helper\n- [decision-needed] pick a queue\n`);
-  assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0);
+  fails(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]), /review output exists: found no file at .agent-workflow\/runs\/[^ ]+\/review\.md/);
+  repo.file(runFile(repo, 'review.md'), `${AXES}- [high] SQL injection in handler\n`);
+  fails(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]), /no open high findings: found 1 open: - \[high\] SQL injection/);
+  repo.file(runFile(repo, 'review.md'), `${AXES}- [medium] rename helper\n- [decision-needed] pick a queue\n`);
+  assertOk(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]));
   assert.equal(repo.state().current.stage, 'gate_review');
 });
 
@@ -160,8 +163,8 @@ test('review: each high finding is judged on its own line', (t) => {
   ];
   for (const text of blocked) {
     repo.setStage('review');
-    repo.file('review.md', AXES + text);
-    fails(repo.run(['done', 'review', '--result', 'review.md']), /no open high findings/);
+    repo.file(runFile(repo, 'review.md'), AXES + text);
+    fails(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]), /no open high findings/);
   }
   for (const text of [
     'no findings tagged high\n',
@@ -170,8 +173,8 @@ test('review: each high finding is judged on its own line', (t) => {
     'all good\n',
   ]) {
     repo.setStage('review');
-    repo.file('review.md', AXES + text);
-    assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0, text);
+    repo.file(runFile(repo, 'review.md'), AXES + text);
+    assert.equal(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]).status, 0, text);
   }
 });
 
@@ -186,7 +189,7 @@ test('verify: runs every tier and needs a non-empty evidence bundle', (t) => {
   fs.mkdirSync(evidence, { recursive: true });
   fails(repo.run(['done', 'verify']), /evidence bundle has files: found an empty directory/);
   fs.writeFileSync(path.join(evidence, 'shot.png'), 'x');
-  assert.equal(repo.run(['done', 'verify']).status, 0);
+  assertOk(repo.run(['done', 'verify']));
   assert.equal(repo.state().current.stage, 'gate_final');
   assert.match(repo.state().current.next_action, /^Ask the human to read the evidence bundle/);
   assert.deepEqual(repo.state().stages.verify.tiers.map((t) => [t.tier, t.skipped, t.code]), [
@@ -198,8 +201,8 @@ test('verify: an explicit --result path overrides the default evidence dir', (t)
   const { repo } = withRun(t);
   repo.setStage('verify');
   repo.config({ commands: { unit: '', lint: '', complexity: '', e2e: '', a11y: '' } });
-  repo.file('out/evidence.txt', 'x');
-  assert.equal(repo.run(['done', 'verify', '--result', 'out/evidence.txt']).status, 0);
+  repo.file(runFile(repo, 'evidence/custom.txt'), 'x');
+  assertOk(repo.run(['done', 'verify', '--result', runFile(repo, 'evidence/custom.txt')]));
 });
 
 const PR_URL = 'https://github.com/acme/app/pull/12';
@@ -211,9 +214,11 @@ test('pr: result must be a GitHub PR URL and there must be a commit since the ba
   fails(repo.run(['done', 'pr', '--result', 'abc123']), /pr result is the PR URL/);
   fails(repo.run(['done', 'pr', '--result', 'https://gerrit.example.com/c/1']), /pr result is the PR URL/);
   fails(repo.run(['done', 'pr', '--result', PR_URL]), /at least one commit: found 0 since [0-9a-f]{40}/);
+  repo.file('src/one.py', '1');
   repo.commit('one');
+  repo.file('src/two.py', '2');
   repo.commit('two');
-  assert.equal(repo.run(['done', 'pr', '--result', PR_URL]).status, 0);
+  assertOk(repo.run(['done', 'pr', '--result', PR_URL]));
   const s = repo.state();
   assert.equal(s.current.stage, 'done');
   assert.equal(s.current.next_action, 'Run complete. No further pipeline action.');

@@ -1,7 +1,7 @@
 // Harness-neutral guard logic. Takes a normalized input and returns a decision:
 //   { permission: 'allow' | 'deny', message?, followup? }
 // Rendering the decision for a specific harness is the adapter's job.
-import { appendEvent, saveState, stageById } from './io.mjs';
+import { appendEvent, git, saveState, stageById } from './io.mjs';
 import { expandWritePatterns, matchesAnyGlob, productGlobs, writesAllowed } from './globs.mjs';
 import { posixRel } from './paths.mjs';
 import { readE2eReport } from './e2e.mjs';
@@ -36,7 +36,7 @@ export function guardPreToolUse(input, state, workflow, config) {
   }
   if (!state?.run?.id) return allow();
   const stg = stageById(workflow, state.current.stage);
-  const patterns = expandWritePatterns(stg?.writes || [], config);
+  const patterns = expandWritePatterns(stg?.writes || [], config, state.run.id);
   if ((state.current.stage === 'implement' || state.current.stage === 'review')
     && matchesAnyGlob(rel, productGlobs(config))) {
     return deny(`frozen tests: ${rel} is in product_test_globs for stage ${state.current.stage}`);
@@ -77,7 +77,7 @@ function sameSet(a, b) {
   return a.every((v, i) => v === b[i]);
 }
 
-export function guardStop(input, state, config) {
+function implementStop(input, state, config) {
   const loopCount = input.loopCount ?? 0;
   if (!state?.run?.id) return allow();
   if (state.current.stage !== 'implement') return allow();
@@ -109,9 +109,46 @@ export function guardStop(input, state, config) {
   return allow({ followup });
 }
 
+// Files the run may change: the writes of every stage up to the current one, plus the run's artifacts.
+export function allowedScope(state, workflow, config) {
+  const patterns = [];
+  for (const stg of workflow.stages) {
+    // Negations are for the current stage only (frozen tests), so they are not unioned.
+    patterns.push(...expandWritePatterns(stg.writes || [], config, state.run.id).filter((p) => !p.startsWith('!')));
+    if (stg.id === state.current.stage) break;
+  }
+  return [...patterns, `specs/spec-${state.run.id}/**`, `.agent-workflow/runs/${state.run.id}/**`];
+}
+
+// Tracked changes since the baseline plus untracked files. The diff backstops shell writes.
+export function changedFiles(state) {
+  const base = state.run.baseline_sha;
+  if (!base) return [];
+  const tracked = git(['diff', '--name-only', base]).stdout || '';
+  const untracked = git(['ls-files', '--others', '--exclude-standard']).stdout || '';
+  // Workflow internals (state, events, queue, config) are not product changes; the protected-file guard covers them.
+  const files = new Set(`${tracked}\n${untracked}`.split('\n').map((s) => s.trim()).filter(Boolean));
+  return [...files].filter((rel) => !rel.startsWith('.agent-workflow/'));
+}
+
+export function scopeViolations(state, workflow, config) {
+  if (!state?.run?.id) return [];
+  const patterns = allowedScope(state, workflow, config);
+  return changedFiles(state).filter((rel) => !writesAllowed(rel, patterns));
+}
+
+// Stop hook: a stray write is reported in the same turn. It adds to the follow-up and never blocks.
+export function guardStop(input, state, config, workflow) {
+  const res = implementStop(input, state, config);
+  const out = scopeViolations(state, workflow, config);
+  if (!out.length) return res;
+  const note = `Out-of-scope changes in ${state.current.stage}: ${out.join(', ')}. Revert them, or ask the human if they are needed.`;
+  return allow({ followup: [note, res.followup].filter(Boolean).join(' ') });
+}
+
 export function evaluate(input, { state, workflow, config }) {
   if (input.event === 'preToolUse') return guardPreToolUse(input, state, workflow, config);
   if (input.event === 'beforeShellExecution') return guardShell(input, state, workflow);
-  if (input.event === 'stop') return guardStop(input, state, config);
+  if (input.event === 'stop') return guardStop(input, state, config, workflow);
   return allow();
 }

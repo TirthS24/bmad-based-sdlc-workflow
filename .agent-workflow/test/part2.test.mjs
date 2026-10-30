@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { ADR, AXES, VALID_APPROACH, VALID_SRS, VALID_SPEC, fresh, withRun } from './helpers.mjs';
+import { ADR, AXES, VALID_APPROACH, VALID_SRS, VALID_SPEC, fresh, withRun, runFile } from './helpers.mjs';
 
 const REAL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fails = (res, re) => {
@@ -259,12 +259,12 @@ test('feasibility: needs decision, non-functional, risks and rollback', (t) => {
 test('review: needs a section per axis and a severity tag on every finding', (t) => {
   const { repo } = withRun(t);
   repo.setStage('review');
-  repo.file('review.md', '## Standards\nopen: 0\n');
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review section Spec conformance: found no such heading/);
-  repo.file('review.md', `${AXES}- src/a.py:3 - rename this\n`);
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review finding severity: found "- src\/a\.py:3/);
-  repo.file('review.md', `${AXES}- [low] src/a.py:3 - rename this\n`);
-  assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0);
+  repo.file(runFile(repo, 'review.md'), '## Standards\nopen: 0\n');
+  fails(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]), /review section Spec conformance: found no such heading/);
+  repo.file(runFile(repo, 'review.md'), `${AXES}- src/a.py:3 - rename this\n`);
+  fails(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]), /review finding severity: found "- src\/a\.py:3/);
+  repo.file(runFile(repo, 'review.md'), `${AXES}- [low] src/a.py:3 - rename this\n`);
+  assert.equal(repo.run(['done', 'review', '--result', runFile(repo, 'review.md')]).status, 0);
 });
 
 // ---- PR decision record ------------------------------------------------------------------

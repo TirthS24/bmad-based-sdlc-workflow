@@ -49,11 +49,11 @@ function writeHint(state) {
   const wf = loadWorkflow();
   const cfg = loadConfig();
   const stg = stageById(wf, state.current.stage);
-  const patterns = expandWritePatterns(stg?.writes || [], cfg);
+  const patterns = expandWritePatterns(stg?.writes || [], cfg, state.run.id);
   const allow = patterns.filter((p) => !p.startsWith('!')).join(', ') || '(none)';
   const block = patterns.filter((p) => p.startsWith('!')).map((p) => p.slice(1)).join(', ');
   const frozen = state.current.stage === 'implement' || state.current.stage === 'review' ? ' frozen-tests' : '';
-  return `allowed: ${allow} / blocked: ${block || 'protected'}${frozen}`;
+  return `allowed: ${allow} / blocked: ${block || 'protected'}${frozen} (checked against the git diff at done)`;
 }
 
 export function formatStatus(state) {

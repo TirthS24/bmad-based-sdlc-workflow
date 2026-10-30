@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { AXES, VALID_APPROACH, VALID_SRS, fresh } from './helpers.mjs';
+import { AXES, VALID_APPROACH, VALID_SRS, fresh, runFile, assertOk } from './helpers.mjs';
 
 test('spec to PR: six human gates, none between implement and review', (t) => {
   const repo = fresh(t);
@@ -47,8 +47,8 @@ test('spec to PR: six human gates, none between implement and review', (t) => {
   repo.file('src/items.py', 'ok = True');
   ok(['done', 'implement']);
   at('review');
-  repo.file('review.md', `${AXES}- [low] naming\n`);
-  ok(['done', 'review', '--result', 'review.md']);
+  repo.file(runFile(repo, 'review.md'), `${AXES}- [low] naming\n`);
+  ok(['done', 'review', '--result', runFile(repo, 'review.md')]);
   at('gate_review');
   ok(['approve', 'gate_review']);
 

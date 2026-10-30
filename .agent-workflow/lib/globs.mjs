@@ -29,7 +29,7 @@ export function globToRegExp(glob) {
 export const productGlobs = (config) => config.product_test_globs ?? config.test_globs ?? [];
 export const unitGlobs = (config) => config.unit_test_globs ?? [];
 
-export function expandWritePatterns(patterns, config) {
+export function expandWritePatterns(patterns, config, runId = '') {
   const out = [];
   const sets = {
     src_globs: config.src_globs || [],
@@ -41,6 +41,8 @@ export function expandWritePatterns(patterns, config) {
     const token = /^(!?)<(test_globs|product_test_globs|unit_test_globs|src_globs)>$/.exec(p);
     if (token) {
       for (const g of sets[token[2]]) out.push(`${token[1]}${g}`);
+    } else if (p === '<run_dir>') {
+      out.push(`.agent-workflow/runs/${runId}/**`);
     } else {
       out.push(p);
     }

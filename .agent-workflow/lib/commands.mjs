@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { freezeHash } from './freeze.mjs';
-import { evaluate } from './guards.mjs';
+import { allowedScope, evaluate, scopeViolations } from './guards.mjs';
 import {
   appendEvent, die, git, loadConfig, loadState, loadWorkflow, parseHookPayload,
   readJson, readStdin, readText, saveState, sha256File, stageById,
@@ -15,7 +15,7 @@ import { PATHS, REPO_ROOT, posixRel, specDir } from './paths.mjs';
 import { adrCommitted } from './adr.mjs';
 import { buildPrBody, decisionRecord, prSummaryPath, prTitle } from './pr.mjs';
 import { CHECKED_STAGES, commitsSince, lastVerify, postcondition } from './postconditions.mjs';
-import { formatProblems } from './problems.mjs';
+import { formatProblems, problem } from './problems.mjs';
 import {
   checkQuestions, checkTickets, escalationCount, srsSectionChecks, ticketsHash,
 } from './tickets.mjs';
@@ -80,6 +80,13 @@ export function cmdStatus(flags, adapter) {
   process.stdout.write(`${formatStatus(state)}\n`);
 }
 
+// A stage may change only the files its writes allow (and the run's artifacts), checked against the diff.
+function scopeProblems(state, workflow, config) {
+  const bad = scopeViolations(state, workflow, config);
+  if (!bad.length) return [];
+  return [problem('writes stay in scope', bad.join(', '), `only ${allowedScope(state, workflow, config).join(', ')}`, 'specs/spec-<id>/SRS.md for planning')];
+}
+
 export function cmdDone(stage, resultPath) {
   const workflow = loadWorkflow();
   const state = loadState();
@@ -90,7 +97,7 @@ export function cmdDone(stage, resultPath) {
   const stg = stageById(workflow, stage);
   if (!stg) die(`unknown stage ${stage}`);
   if (stg.executor === 'human') die('human gates use wf approve, not wf done');
-  const problems = postcondition(stage, state, resultPath);
+  const problems = [...postcondition(stage, state, resultPath), ...scopeProblems(state, workflow, loadConfig())];
   if (problems.length) die(`postcondition failed for ${stage} (${problems.length} problem${problems.length === 1 ? '' : 's'}):\n${formatProblems(problems)}`);
   if (stage === 'tests') {
     state.freeze.test_files_hash = freezeHash(loadConfig());

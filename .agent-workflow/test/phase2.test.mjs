@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { VALID_TICKET_BE, VALID_TEST_PLAN, withRun } from './helpers.mjs';
+import { VALID_TICKET_BE, VALID_TEST_PLAN, withRun, assertOk } from './helpers.mjs';
 
 const edit = (file) => ({ tool_name: 'Write', tool_input: { file_path: file } });
 const fails = (res, re) => {
@@ -37,9 +37,9 @@ function setup(t) {
   repo.config({
     product_test_globs: ['E2E/tests/**'],
     unit_test_globs: ['tests/**/*.py'],
-    commands: { unit: '', lint: '', e2e: 'node fake-pw.mjs' },
+    commands: { unit: '', lint: '', e2e: 'node .agent-workflow/fake-pw.mjs' },
   });
-  repo.file('fake-pw.mjs', FAKE_PW);
+  repo.file('.agent-workflow/fake-pw.mjs', FAKE_PW);
   repo.seedPlanning(ctx.id);
   repo.file(`specs/spec-${ctx.id}/tickets/be/TKT-BE-001.json`, `${JSON.stringify({
     ...VALID_TICKET_BE,
@@ -83,11 +83,15 @@ test('freeze hash ignores unit tests and follows product tests', (t) => {
   repo.file('E2E/tests/a.spec.ts', 'A');
   const hashFor = () => {
     repo.setStage('tests');
-    assert.equal(repo.run(['done', 'tests']).status, 0);
+    assertOk(repo.run(['done', 'tests']));
     return repo.state().freeze.test_files_hash;
   };
   const h1 = hashFor();
   repo.file('tests/test_unit.py', 'U');
+  repo.setStage('tests');
+  assert.match(repo.run(['done', 'tests']).stderr, /writes stay in scope: found tests\/test_unit\.py/);
+  fs.rmSync(path.join(repo.root, 'tests/test_unit.py'));
+  repo.setStage('tests');
   assert.equal(hashFor(), h1);
   repo.file('E2E/tests/a.spec.ts', 'B');
   assert.notEqual(hashFor(), h1);
@@ -98,7 +102,7 @@ test('tests stage: e2e must fail and cite an id; exit 0 is refused', (t) => {
   repo.setStage('tests');
   fails(repo.run(['done', 'tests'], { env: { FAKE_STATUS: 'expected' } }), /new tests are red: found the e2e tier exited 0/);
   fails(repo.run(['done', 'tests'], { env: { FAKE_TITLE: 'no ids here' } }), /failures cite ids/);
-  assert.equal(repo.run(['done', 'tests']).status, 0);
+  assertOk(repo.run(['done', 'tests']));
 });
 
 test('verify: a failing e2e test blocks, a missing report blocks', (t) => {
@@ -118,7 +122,7 @@ test('verify: every planned e2e scenario needs a passing test', (t) => {
 test('verify: flaky passes and is reported in the summary', (t) => {
   const { repo, id } = setup(t);
   repo.setStage('verify');
-  assert.equal(repo.run(['done', 'verify'], { env: { FAKE_STATUS: 'flaky' } }).status, 0);
+  assertOk(repo.run(['done', 'verify'], { env: { FAKE_STATUS: 'flaky' } }));
   const summary = fs.readFileSync(path.join(repo.wfDir, 'runs', id, 'evidence', 'e2e-summary.md'), 'utf8');
   assert.match(summary, /\| PRD-1\.1, REQ-1 \| PRD-1\.1 REQ-1 greeting shows \| flaky \|/);
   assert.match(summary, /1 flaky/);
@@ -141,7 +145,7 @@ test('fixture run: suite is red, implementer turns it green, verify records it',
   repo.file('src/greeting.js', 'module.exports = "hello";');
   assert.equal(repo.run(['done', 'implement']).status, 0, 'green after implementation');
   repo.setStage('verify');
-  assert.equal(repo.run(['done', 'verify']).status, 0);
+  assertOk(repo.run(['done', 'verify']));
   assert.ok(fs.existsSync(path.join(repo.wfDir, 'runs', id, 'evidence', 'e2e-results.json')));
 });
 
@@ -199,5 +203,5 @@ test('verify: automated ui and api product scenarios need a passing test too', (
     /no passing test for planned scenario PRD-1\.3/);
   fails(repo.run(['done', 'verify'], { env: { FAKE_SPECS: specs(['PRD-1.1', 'PRD-1.3']) } }),
     /no passing test for planned scenario PRD-1\.2/);
-  assert.equal(repo.run(['done', 'verify'], { env: { FAKE_SPECS: specs(['PRD-1.1', 'PRD-1.2', 'PRD-1.3']) } }).status, 0);
+  assertOk(repo.run(['done', 'verify'], { env: { FAKE_SPECS: specs(['PRD-1.1', 'PRD-1.2', 'PRD-1.3']) } }));
 });

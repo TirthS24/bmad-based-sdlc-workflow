@@ -76,7 +76,7 @@ test('status prints run, branch, stage, gates, loop, writes and next_action', (t
   assert.match(out, /^attempt: 1$/m);
   assert.match(out, /^gates: spec=pending approach=pending tests=pending review=pending final=pending$/m);
   assert.match(out, /^loop: 0$/m);
-  assert.match(out, /^writes: allowed: specs\/\*\* \/ blocked: protected$/m);
+  assert.match(out, /^writes: allowed: specs\/\*\* \/ blocked: protected \(checked against the git diff at done\)$/m);
   assert.match(out, /^next_action: /m);
 });
 
@@ -86,9 +86,9 @@ test('status writes hint marks frozen tests in implement and review', (t) => {
   const impl = repo.run(['status']).stdout;
   assert.match(impl, /writes: allowed: src\/\*\* \/ blocked: .*tests\/\*\*\/\*\.py.* frozen-tests/);
   repo.setStage('review');
-  assert.match(repo.run(['status']).stdout, / frozen-tests$/m);
+  assert.match(repo.run(['status']).stdout, / frozen-tests \(checked against the git diff at done\)$/m);
   repo.setStage('verify');
-  assert.match(repo.run(['status']).stdout, /writes: allowed: \(none\) \/ blocked: protected$/m);
+  assert.match(repo.run(['status']).stdout, /writes: allowed: \.agent-workflow\/runs\/[^ ]+\/\*\* \/ blocked: protected \(checked against the git diff at done\)$/m);
 });
 
 test('status --check exits 0 with no run or a healthy run', (t) => {

@@ -60,7 +60,8 @@
       "writes": [
         "<src_globs>",
         "<unit_test_globs>",
-        "!<product_test_globs>"
+        "!<product_test_globs>",
+        "<run_dir>"
       ],
       "max_rounds": 3,
       "next": "gate_review"
@@ -75,7 +76,9 @@
     {
       "id": "verify",
       "executor": "agent:verifier",
-      "writes": [],
+      "writes": [
+        "<run_dir>"
+      ],
       "max_fix_rounds": 2,
       "next": "gate_final"
     },
