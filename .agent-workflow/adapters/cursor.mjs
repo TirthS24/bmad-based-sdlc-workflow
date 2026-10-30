@@ -13,6 +13,7 @@ function extractFilePath(payload) {
     input.path,
     input.file_path,
     input.filePath,
+    input.target_file,
     Array.isArray(input.file_path) ? input.file_path[0] : null,
   ];
   for (const c of candidates) {
@@ -52,6 +53,7 @@ export function normalize(event, payload) {
     filePath: extractFilePath(payload),
     command: extractCommand(payload),
     loopCount: payload.loop_count ?? 0,
+    status: payload.status || null,
     raw: payload,
   };
 }
@@ -65,6 +67,8 @@ export function render(event, decision) {
     }
     return { stdout: `${JSON.stringify({ permission: 'allow' })}\n`, exitCode: 0 };
   }
+  // subagentStart is a permission hook: Cursor blocks the dispatch on output it cannot read.
+  if (event === 'subagentStart') return { stdout: `${JSON.stringify({ permission: 'allow' })}\n`, exitCode: 0 };
   if (event === 'stop' && decision.followup) {
     return { stdout: `${JSON.stringify({ followup_message: decision.followup })}\n`, exitCode: 0 };
   }

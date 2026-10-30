@@ -330,7 +330,6 @@ node .agent-workflow/wf.mjs status
 | `.agent-workflow/state.json` | Current run (never hand-edit) |
 | `.agent-workflow/events.jsonl` | Local audit log |
 | `.agent-workflow/rules/` | Stack rule packs |
-| `docs/REQUIREMENTS.md`, `IMPLEMENTATION_PLAN.md`, `KNOWN_ISSUES.md`, `RUNBOOK.md`, `adapter-contract.md` | Deeper reference |
-| `docs/PHASE1_MANUAL_TEST.md`, `PHASE2_MANUAL_TEST.md` | Manual walkthroughs to try it yourself |
+| `docs/RUNBOOK.md`, `adapter-contract.md` | Deeper reference |
 
 Run the workflow's own tests with `npm test`.

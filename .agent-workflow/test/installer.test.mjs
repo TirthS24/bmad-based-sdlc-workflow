@@ -61,6 +61,19 @@ for (const [harness, l] of Object.entries(LAYOUT)) {
   });
 }
 
+test('the BMAD skills the stages use are installed with _bmad scripts; its config is never overwritten', (t) => {
+  const dir = project(t);
+  install(dir, 'claude-code');
+  for (const s of ['bmad-code-review', 'bmad-review', 'bmad-deep-recon', 'bmad-project-context', 'bmad-walkthrough', 'product-quality-assurance', 'frontend-design']) {
+    assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', s, 'SKILL.md')), s);
+  }
+  assert.ok(fs.existsSync(path.join(dir, '_bmad', 'scripts', 'resolve_customization.py')));
+  assert.match(fs.readFileSync(path.join(dir, '_bmad', 'config.toml'), 'utf8'), new RegExp(`project_name = "${path.basename(dir)}"`));
+  fs.writeFileSync(path.join(dir, '_bmad', 'bmm', 'config.yaml'), 'user_name: mine\n');
+  install(dir, 'claude-code');
+  assert.equal(fs.readFileSync(path.join(dir, '_bmad', 'bmm', 'config.yaml'), 'utf8'), 'user_name: mine\n');
+});
+
 test('cursor and claude-code get their hook wiring; generic gets git hooks and CI', (t) => {
   const cur = project(t);
   install(cur, 'cursor');
@@ -73,7 +86,7 @@ test('cursor and claude-code get their hook wiring; generic gets git hooks and C
   const settings = json(path.join(cc, '.claude', 'settings.json')).hooks;
   assert.equal(settings.PreToolUse.length, 2);
   assert.equal(settings.PreToolUse[1].matcher, 'Bash');
-  assert.ok(settings.Stop[0].hooks[0].command.endsWith('guard stop'));
+  assert.ok(settings.Stop[0].hooks[0].command.endsWith('guard stop --from claude-code'));
   assert.ok(settings.SessionStart && settings.PostToolUse);
 
   const gen = project(t);
@@ -111,6 +124,7 @@ test('upgrade: core is refreshed, the project\'s own files are untouched', (t) =
   const settings = json(settingsFile);
   settings.permissions = { allow: ['Bash(npm test)'] };
   settings.hooks.PreToolUse.push({ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] });
+  settings.hooks.PreToolUse.push({ matcher: 'Write', hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs guard preToolUse' }] }); // an older install
   fs.writeFileSync(settingsFile, JSON.stringify(settings));
 
   fs.writeFileSync(path.join(wfDir, 'VERSION'), '0.0.9\n');
@@ -139,18 +153,21 @@ test('upgrade: core is refreshed, the project\'s own files are untouched', (t) =
   assert.deepEqual(merged.permissions, { allow: ['Bash(npm test)'] });
   assert.ok(merged.hooks.PreToolUse.some((e) => e.hooks.some((h) => h.command === 'echo mine')));
   assert.equal(merged.hooks.PreToolUse.filter((e) => e.hooks.some((h) => h.command.includes('guard preToolUse'))).length, 1, 'no duplicate hooks');
+  assert.ok(merged.hooks.PreToolUse.every((e) => e.hooks.every((h) => h.command === 'echo mine' || h.command.endsWith('--from claude-code'))), 'old wf commands replaced');
   assert.equal(wf(dir, ['doctor']).status, 0);
 });
 
 test('existing cursor hooks and a gitignore are merged, not replaced', (t) => {
   const dir = project(t);
   fs.mkdirSync(path.join(dir, '.cursor'));
-  fs.writeFileSync(path.join(dir, '.cursor', 'hooks.json'), JSON.stringify({ version: 1, hooks: { stop: [{ command: 'echo mine' }] } }));
+  const old = { command: 'node .agent-workflow/wf.mjs guard preToolUse', matcher: 'Write|MultiEdit|Edit', failClosed: true, timeout: 10 };
+  fs.writeFileSync(path.join(dir, '.cursor', 'hooks.json'), JSON.stringify({ version: 1, hooks: { stop: [{ command: 'echo mine' }], preToolUse: [old] } }));
   fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n');
   install(dir, 'cursor');
   install(dir, 'cursor');
-  const stop = json(path.join(dir, '.cursor', 'hooks.json')).hooks.stop;
-  assert.deepEqual(stop.map((h) => h.command), ['echo mine', 'node .agent-workflow/wf.mjs guard stop']);
+  const { hooks } = json(path.join(dir, '.cursor', 'hooks.json'));
+  assert.deepEqual(hooks.stop.map((h) => h.command), ['echo mine', 'node .agent-workflow/wf.mjs guard stop']);
+  assert.deepEqual(hooks.preToolUse.map((h) => h.matcher), ['Write|Delete'], 'an upgrade replaces our entry, matcher included');
   const ignore = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8');
   assert.ok(ignore.startsWith('node_modules/\n'));
   assert.equal(ignore.split('.agent-workflow/queue/').length - 1, 1);

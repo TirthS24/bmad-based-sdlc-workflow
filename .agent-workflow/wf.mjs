@@ -7,6 +7,7 @@
  * and harness-specific hook handling lives in adapters/.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import * as claudeCode from './adapters/claude-code.mjs';
 import * as cursor from './adapters/cursor.mjs';
@@ -22,6 +23,7 @@ import { cmdEscalation } from './lib/escalation.mjs';
 import { cmdGoto } from './lib/goto.mjs';
 import { cmdInit } from './lib/init.mjs';
 import { die } from './lib/io.mjs';
+import { REPO_ROOT } from './lib/paths.mjs';
 
 export function parseArgs(argv) {
   const flags = {};
@@ -42,6 +44,7 @@ export function parseArgs(argv) {
     else if (a === '--approach') flags.approach = argv[++i];
     else if (a === '--profile') flags.profile = argv[++i];
     else if (a === '--reason') flags.reason = argv[++i];
+    else if (a === '--from') flags.from = argv[++i];
     else rest.push(a);
   }
   return { flags, rest };
@@ -49,11 +52,20 @@ export function parseArgs(argv) {
 
 // One adapter per harness. The installer writes .agent-workflow/adapter; WF_ADAPTER overrides it.
 const ADAPTERS = { cursor, 'claude-code': claudeCode, generic };
-const adapter = ADAPTERS[harnessName()] || cursor;
+
+// Cursor also runs Claude Code hooks from .claude/settings.json (third-party import). When the project
+// wires the workflow in .cursor/hooks.json too, those copies would guard, log and count each event twice.
+function duplicateUnderCursor(flags) {
+  if (flags.from !== 'claude-code' || !process.env.CURSOR_VERSION) return false;
+  try { return fs.readFileSync(path.join(REPO_ROOT, '.cursor', 'hooks.json'), 'utf8').includes('wf.mjs'); } catch { return false; }
+}
 
 export async function main(argv = process.argv.slice(2)) {
   const { flags, rest } = parseArgs(argv);
   const cmd = rest[0];
+  // A hook names the harness that wired it, so its payload is read with that harness's adapter.
+  const adapter = ADAPTERS[flags.from] || ADAPTERS[harnessName()] || cursor;
+  if (duplicateUnderCursor(flags)) process.exit(0);
   if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') {
     process.stdout.write(`usage: wf.mjs <init|gate-check|ci-check|login|logout|whoami|sync|report-failure|doctor|adr|brief|goto|escalation|run|status|done|check|profile|tickets|agent|approve|reject|pr|verify|guard|log|prune|abort|pause|resume> [args]\n`);
     process.exit(cmd ? 0 : 1);

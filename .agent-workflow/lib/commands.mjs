@@ -364,11 +364,17 @@ export function cmdGuard(event, adapter) {
   process.exit(out.exitCode);
 }
 
+// Logging hooks must never block work, so a failure to record is swallowed and the hook still allows.
 export function cmdLog(event, adapter, input) {
-  const i = input || adapter.normalize(event, parseHookPayload(readStdin()));
+  try {
+    recordLog(event, input || adapter.normalize(event, parseHookPayload(readStdin())));
+  } catch { /* telemetry never blocks */ }
+  process.stdout.write(adapter.render(event, { permission: 'allow' }).stdout || '{}\n');
+}
+
+function recordLog(event, i) {
   if (event === 'subagentStart') {
     appendEvent('subagent_start', { agent: i.agent, started_at: new Date().toISOString(), subagent_id: i.subagentId || undefined });
-    process.stdout.write('{}\n');
     return;
   }
   if (event === 'subagentStop') {
@@ -380,14 +386,12 @@ export function cmdLog(event, adapter, input) {
       ended_at: endedAt,
       subagent_id: i.subagentId || undefined,
     });
-    process.stdout.write('{}\n');
     return;
   }
   appendEvent(event, {
     tool: i.tool || undefined,
     path: i.filePath || undefined,
   });
-  process.stdout.write('{}\n');
 }
 
 function skillSearchRoots() {

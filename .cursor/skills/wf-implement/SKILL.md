@@ -13,7 +13,7 @@ description: "Pipeline stage: implement. Run only when `wf status` says the stag
 
 ## What this stage does
 
-Dispatch `implementer` for **one** attempt. It owns the unit tests; the frozen Playwright product tests stay untouched and must pass too (the implement check runs the e2e command when one is set). Do not loop in this skill. The `stop` hook re-submits until `wf verify` is green or `loop_caps.implement` / a plateau is hit.
+Dispatch `implementer` for **one** attempt. If any ticket under `tickets/fe/` exists, name those ticket ids in the brief and tell the implementer to apply the `frontend-design` skill to them. It owns the unit tests; the frozen Playwright product tests stay untouched and must pass too (the implement check runs the e2e command when one is set). Do not loop in this skill. The `stop` hook re-submits until `wf verify` is green or `loop_caps.implement` / a plateau is hit.
 
 ## Inputs
 

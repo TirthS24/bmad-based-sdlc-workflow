@@ -145,6 +145,8 @@ export function scopeViolations(state, workflow, config) {
 
 // Stop hook: a stray write is reported in the same turn. It adds to the follow-up and never blocks.
 export function guardStop(input, state, config, workflow) {
+  // Only a turn that finished on its own continues; a stop the human pressed (aborted) or an error ends here.
+  if (input.status && input.status !== 'completed') return allow();
   const res = implementStop(input, state, config, workflow);
   let out;
   try {

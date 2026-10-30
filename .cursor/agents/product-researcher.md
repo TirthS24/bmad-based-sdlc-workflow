@@ -9,8 +9,15 @@ and `.agent-workflow/standards.md` heading "Research rubric".
 
 You write one file: `specs/spec-<id>/research.md`. Answer only the questions in the brief. Then reply with one line: the path.
 You may use web search, read READMEs and official docs, and explore the
-codebase. If a `bmad-deep-recon` pack fits (market, competitive, domain,
-user-voice, technical, academic), follow it.
+codebase.
+
+Run the research with the `bmad-deep-recon` skill, in its run mode, using the
+pack the brief names for each question (market, competitive, domain,
+user-voice, technical, academic). The brief is the approved plan, so don't
+stop to ask for approval. Bind its `{doc_workspace}` to
+`specs/spec-<id>/research/`. If you have no shell for its `uv run` scripts,
+keep its memlog by hand in that folder. Its report becomes `research.md` in the
+format below.
 
 Format, at most two pages:
 

@@ -48,8 +48,49 @@ test('every hooks.json command answers exactly as pinned', (t) => {
   assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'afterFileEdit', tool: 'Write', path: 'specs/x.md' });
 
   assert.deepEqual(fire(repo, hooks.stop, {}), { status: 0, stdout: '{}\n', stderr: '' });
-  assert.deepEqual(fire(repo, hooks.subagentStart, { subagent_type: 'explore' }), { status: 0, stdout: '{}\n', stderr: '' });
+  assert.deepEqual(fire(repo, hooks.subagentStart, { subagent_type: 'explore' }), { status: 0, stdout: allowOut, stderr: '' });
   assert.deepEqual(fire(repo, hooks.subagentStop, { subagent_type: 'explore', status: 'completed', duration_ms: 100 }), { status: 0, stdout: '{}\n', stderr: '' });
+});
+
+test('the write guard also covers Cursor\'s Delete tool', (t) => {
+  const { hooks: raw } = JSON.parse(fs.readFileSync(HOOKS, 'utf8'));
+  assert.ok(new RegExp(`^(${raw.preToolUse[0].matcher})$`).test('Delete'), 'matcher includes Delete');
+  const { repo } = withRun(t);
+  const res = fire(repo, hookArgs().preToolUse, { tool_name: 'Delete', tool_input: { target_file: '.agent-workflow/state.json' } });
+  assert.equal(res.status, 2);
+  assert.match(res.stdout, /protected file: \.agent-workflow\/state\.json/);
+});
+
+test('a stop the human pressed, or an error, never sends a follow-up', (t) => {
+  const { repo } = withRun(t);
+  repo.update((s) => { s.current.stage = 'implement'; });
+  fs.writeFileSync(path.join(repo.wfDir, 'config.json'), JSON.stringify({ ...JSON.parse(fs.readFileSync(path.join(repo.wfDir, 'config.json'), 'utf8')), commands: { unit: 'exit 1' } }));
+  const hooks = hookArgs();
+  for (const status of ['aborted', 'error']) {
+    assert.deepEqual(fire(repo, hooks.stop, { status, loop_count: 0 }), { status: 0, stdout: '{}\n', stderr: '' }, status);
+  }
+  assert.match(fire(repo, hooks.stop, { status: 'completed', loop_count: 0 }).stdout, /followup_message/);
+});
+
+test('a logging hook that cannot record still allows', (t) => {
+  const { repo } = withRun(t);
+  const events = path.join(repo.wfDir, 'events.jsonl');
+  fs.rmSync(events, { force: true });
+  fs.mkdirSync(events); // appending to a directory throws
+  assert.deepEqual(fire(repo, hookArgs().subagentStart, { subagent_type: 'explore' }), { status: 0, stdout: allowOut, stderr: '' });
+});
+
+test('Claude Code hooks that Cursor imports do nothing when .cursor/hooks.json already wires the workflow', (t) => {
+  const { repo } = withRun(t);
+  const args = ['guard', 'preToolUse', '--from', 'claude-code'];
+  const input = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: '.agent-workflow/state.json' } });
+  const before = repo.events().length;
+  repo.file('.cursor/hooks.json', fs.readFileSync(HOOKS, 'utf8'));
+  assert.deepEqual(repo.run(args, { input, env: { CURSOR_VERSION: '3.0.0' } }), { status: 0, stdout: '', stderr: '' }, 'skipped under Cursor');
+  assert.equal(repo.events().length, before, 'nothing logged twice');
+  const claude = repo.run(args, { input, env: { CURSOR_VERSION: '' } });
+  assert.equal(claude.status, 2, 'still guards under Claude Code');
+  assert.match(claude.stderr, /protected file/);
 });
 
 test('failClosed hooks still answer valid JSON on a malformed payload', (t) => {

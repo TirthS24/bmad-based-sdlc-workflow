@@ -19,7 +19,7 @@ description: "Pipeline stage: planning. Run only when `wf status` says the stage
    - If the cap is hit with open questions → `/wf-unblock`, do not silently stop.
 3. **SRS** — `srs-writer` writes `SRS.md` itself. Its file is checked in step 6 (`wf tickets check`); never hand-edit it.
 4. **Tickets** — `ticket-writer` (use persona-* skills) writes `tickets/<persona>/*.json` itself. Its file is checked in step 6 (`wf tickets check`); never hand-edit it.
-5. **Acceptance tests** — fresh context: `acceptance-test-writer` updates the ticket JSON with `test_cases` itself.
+5. **Acceptance tests** — fresh context: `acceptance-test-writer` updates the ticket JSON with `test_cases` itself, designing them with the `product-quality-assurance` skill (traceability, risk depth, non-functional cases). Name that skill in its brief.
 6. **Validate** — `node .agent-workflow/wf.mjs tickets check` (fix until clean).
 7. **Review** — `/wf-spec-review`.
 8. **Optional research** — if gaps need `/wf-research`, run it, update SRS, re-run tickets check.

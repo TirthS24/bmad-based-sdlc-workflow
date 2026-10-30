@@ -1,4 +1,0 @@
-# Team override: workflow specs live at repo-root specs/spec-<slug>/
-[workflow]
-spec_output_path = "specs"
-run_folder_pattern = "spec-{slug}"

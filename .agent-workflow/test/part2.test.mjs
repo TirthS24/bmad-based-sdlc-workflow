@@ -16,7 +16,7 @@ const fails = (res, re) => {
 
 function doctorRepo(t) {
   const repo = fresh(t);
-  for (const d of ['.cursor/skills', '.cursor/agents']) {
+  for (const d of ['.cursor/skills', '.cursor/agents', '.agents/skills']) {
     fs.cpSync(path.join(REAL_ROOT, d), path.join(repo.root, d), { recursive: true });
   }
   for (const f of ['capabilities.json', 'standards.md']) {

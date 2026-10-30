@@ -1,8 +1,10 @@
 ---
 name: product-quality-assurance
-description: Validates story implementations through testing, code review, and quality gate assessment. Uses testing skill for execution, checks standards compliance, and creates quality gate decisions (PASS/CONCERNS/FAIL/WAIVED). Use only when explicitly invoked; wf-verify owns the pipeline gate.
+description: Validates story implementations through testing, code review, and quality gate assessment. Uses testing skill for execution, checks standards compliance, and creates quality gate decisions (PASS/CONCERNS/FAIL/WAIVED). In the pipeline, acceptance-test-writer applies its test design (traceability, risk, NFRs) to ticket test cases during planning; wf-verify owns the pipeline gate.
 disable-model-invocation: true
 ---
+
+> **Planning use (acceptance-test-writer):** apply only Core Principles, Step 4 "Requirements Traceability", Step 5 "Risk Assessment" and "Risk-Based Depth" to design the `test_cases` of each acceptance criterion. Nothing is implemented yet, so skip running tests, the testing skill, quality gate files and story updates. Edit only the ticket JSON.
 
 # QA Skill - Testing & Quality Validation
 

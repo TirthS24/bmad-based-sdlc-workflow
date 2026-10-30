@@ -7,7 +7,7 @@
     "preToolUse": [
       {
         "command": "node .agent-workflow/wf.mjs guard preToolUse",
-        "matcher": "Write|MultiEdit|Edit",
+        "matcher": "Write|Delete",
         "failClosed": true,
         "timeout": 10
       }

@@ -37,7 +37,7 @@ const CLAUDE_TOOLS = {
   'srs-writer': WRITER_TOOLS,
   'ticket-writer': WRITER_TOOLS,
   'acceptance-test-writer': WRITER_TOOLS,
-  'product-researcher': WRITER_TOOLS,
+  'product-researcher': { tools: 'Read, Write, Edit, Grep, Glob, WebSearch, WebFetch' },
   'solution-architect': WRITER_TOOLS,
   'code-reviewer': WRITER_TOOLS,
   'requirements-ingestor': { disallowedTools: 'Bash' },
@@ -69,33 +69,36 @@ function mergeCursorHooks(file) {
   mine.hooks = mine.hooks || {};
   for (const [event, entries] of Object.entries(ours.hooks)) {
     mine.hooks[event] = mine.hooks[event] || [];
-    for (const entry of entries) if (!mine.hooks[event].some((e) => e.command === entry.command)) mine.hooks[event].push(entry);
+    for (const entry of entries) {
+      // Our entry is matched by command and replaced, so an upgrade also updates its matcher and options.
+      const at = mine.hooks[event].findIndex((e) => e.command === entry.command);
+      if (at >= 0) mine.hooks[event][at] = entry; else mine.hooks[event].push(entry);
+    }
   }
   mine.version = mine.version || 1;
   writeJson(file, mine);
 }
 
 const CLAUDE_HOOKS = {
-  SessionStart: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs status --hook', timeout: 5 }] }],
+  SessionStart: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs status --hook --from claude-code', timeout: 5 }] }],
   PreToolUse: [
-    { matcher: 'Write|Edit|MultiEdit', hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs guard preToolUse', timeout: 10 }] },
-    { matcher: 'Bash', hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs guard beforeShellExecution', timeout: 10 }] },
+    { matcher: 'Write|Edit|MultiEdit', hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs guard preToolUse --from claude-code', timeout: 10 }] },
+    { matcher: 'Bash', hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs guard beforeShellExecution --from claude-code', timeout: 10 }] },
   ],
-  PostToolUse: [{ matcher: 'Write|Edit|MultiEdit', hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs log afterFileEdit', timeout: 5 }] }],
-  Stop: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs guard stop', timeout: 600 }] }],
-  SubagentStart: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs log subagentStart', timeout: 5 }] }],
-  SubagentStop: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs log subagentStop', timeout: 5 }] }],
+  PostToolUse: [{ matcher: 'Write|Edit|MultiEdit', hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs log afterFileEdit --from claude-code', timeout: 5 }] }],
+  Stop: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs guard stop --from claude-code', timeout: 600 }] }],
+  SubagentStart: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs log subagentStart --from claude-code', timeout: 5 }] }],
+  SubagentStop: [{ hooks: [{ type: 'command', command: 'node .agent-workflow/wf.mjs log subagentStop --from claude-code', timeout: 5 }] }],
 };
+
+// Our entries are dropped and re-added, so commands from an older install don't run alongside the new ones.
+const OURS = (e) => (e.hooks || []).some((h) => String(h.command || '').startsWith('node .agent-workflow/wf.mjs '));
 
 function mergeClaudeSettings(file) {
   const mine = readJson(file, {});
   mine.hooks = mine.hooks || {};
   for (const [event, entries] of Object.entries(CLAUDE_HOOKS)) {
-    mine.hooks[event] = mine.hooks[event] || [];
-    for (const entry of entries) {
-      const cmd = entry.hooks[0].command;
-      if (!mine.hooks[event].some((e) => (e.hooks || []).some((h) => h.command === cmd))) mine.hooks[event].push(entry);
-    }
+    mine.hooks[event] = [...(mine.hooks[event] || []).filter((e) => !OURS(e)), ...entries];
   }
   writeJson(file, mine);
 }
@@ -141,6 +144,23 @@ function ensureGitignore(target) {
   if (add.length) fs.appendFileSync(f, `${have.length && have.at(-1) !== '' ? '\n' : ''}# workflow (local state)\n${add.join('\n')}\n`);
 }
 
+// The BMAD skills resolve their customization and config through _bmad/. The scripts are replaced
+// on every install; the config is the project's, so a minimal one is written only when missing.
+function installBmad(target) {
+  const dir = path.join(target, '_bmad');
+  fs.rmSync(path.join(dir, 'scripts'), { recursive: true, force: true });
+  copyDir(path.join(SRC, '_bmad', 'scripts'), path.join(dir, 'scripts'));
+  const name = path.basename(path.resolve(target));
+  const files = {
+    'config.toml': `[core]\nproject_name = "${name}"\ncommunication_language = "English"\ndocument_output_language = "English"\noutput_folder = "_bmad-output"\n`,
+    'bmm/config.yaml': `project_name: ${name}\nuser_name: developer\ncommunication_language: English\ndocument_output_language: English\noutput_folder: _bmad-output\nplanning_artifacts: "{project-root}/_bmad-output/planning-artifacts"\nimplementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"\nproject_knowledge: "{project-root}/docs"\n`,
+  };
+  for (const [f, text] of Object.entries(files)) {
+    const out = path.join(dir, f);
+    if (!fs.existsSync(out)) { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, text); }
+  }
+}
+
 export function install({ target, harness, server }) {
   const h = HARNESSES[harness];
   if (!h) throw new Error(`unknown harness "${harness}" (cursor, claude-code, generic)`);
@@ -171,9 +191,10 @@ export function install({ target, harness, server }) {
   const agents = new Set();
   for (const cap of Object.values(manifest.stages)) { (cap.skills || []).forEach((s) => names.add(s)); (cap.agents || []).forEach((a) => agents.add(a)); }
   for (const s of names) {
-    const from = path.join(SRC, '.cursor', 'skills', s);
-    if (fs.existsSync(from)) { fs.rmSync(path.join(target, h.skills, s), { recursive: true, force: true }); copyDir(from, path.join(target, h.skills, s)); }
+    const from = [path.join(SRC, '.cursor', 'skills', s), path.join(SRC, '.agents', 'skills', s)].find((d) => fs.existsSync(d));
+    if (from) { fs.rmSync(path.join(target, h.skills, s), { recursive: true, force: true }); copyDir(from, path.join(target, h.skills, s)); }
   }
+  installBmad(target);
   for (const a of agents) {
     const from = path.join(SRC, '.cursor', 'agents', `${a}.md`);
     if (fs.existsSync(from)) {

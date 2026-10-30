@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 Turns what `wf init` detected into files the later stages read. Everything you write is a draft until a human approves it. Do not run a workflow run (`/wf-run`) while doing this.
 
-1. **Project context.** If the `bmad-project-context` skill is installed under `.agents/skills/` or `.cursor/skills/`, use it to survey the project, then keep the four headings below. Read the evidence files in `project.json` plus the README and the top-level layout. Write `.agent-workflow/context/project-context.md` with these headings, each short and factual:
+1. **Project context.** Run the `bmad-project-context` skill to survey the project, in its audit mode. Use only its findings. Do not let it write or edit `AGENTS.md`, `CLAUDE.md` or any agent-instructions block, because the installer manages those. Then keep the four headings below. Read the evidence files in `project.json` plus the README and the top-level layout. Write `.agent-workflow/context/project-context.md` with these headings, each short and factual:
    - `## Stack`: languages, frameworks, versions, package manager
    - `## Layout`: main folders and what lives in them, where tests are
    - `## Commands`: how to install, run, test, lint (only ones you saw in the repo)

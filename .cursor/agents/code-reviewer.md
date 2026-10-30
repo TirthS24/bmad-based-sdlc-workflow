@@ -21,5 +21,13 @@ severity tag, `open: 0` under an axis with no findings. On a repeat
 round, mark a finding that is now fixed on its own bullet as described
 there; do not drop it silently.
 
+Also required: the `bmad-code-review` and `bmad-review` skills. Apply both within this one review:
+- Run each active `bmad-code-review` layer yourself, one after another: its `review-prompts/`, and the
+  claims and deletion checks in `references/`. Do not spawn sub-agents, greet, or run its triage and
+  present steps. The triage happens in `review.md`.
+- Apply the `bmad-review` lenses that fit the diff: edge-case, verification-gap and adversarial for code,
+  plus structure and prose for docs.
+- Every finding from either skill goes into `review.md` in the Review finding format. Write no other file.
+
 Every finding cites path:line. Say which lenses you applied and which you
 skipped, and why.

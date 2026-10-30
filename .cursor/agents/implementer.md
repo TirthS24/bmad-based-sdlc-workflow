@@ -19,6 +19,11 @@ that instead of improvising. Log anything out-of-scope you notice into
 `.agent-workflow/runs/<id>/deferred.md` instead of fixing it now. Ask
 before adding a dependency. Do not log PHI/PII.
 
+For every ticket with persona `fe`, read the `frontend-design` skill before you
+build its UI, and apply it to the components, pages and styling. Where it
+disagrees with the approved approach, the rule packs or the project's existing
+design system and components, those win.
+
 When given review findings, fix only those findings.
 
 Return a short summary plus file paths.

@@ -42,7 +42,9 @@
         "persona-ui-ux",
         "persona-fe",
         "persona-be",
-        "persona-qa"
+        "persona-qa",
+        "product-quality-assurance",
+        "bmad-deep-recon"
       ],
       "agents": [
         "requirements-ingestor",
@@ -106,8 +108,7 @@
     "tests": {
       "skills": [
         "wf-tests",
-        "wf-playwright-e2e",
-        "product-quality-assurance"
+        "wf-playwright-e2e"
       ],
       "agents": [
         "test-architect"
@@ -130,7 +131,6 @@
     "implement": {
       "skills": [
         "wf-implement",
-        "unit-testing-test-generate",
         "frontend-design"
       ],
       "agents": [
@@ -144,7 +144,9 @@
     },
     "review": {
       "skills": [
-        "wf-review"
+        "wf-review",
+        "bmad-code-review",
+        "bmad-review"
       ],
       "agents": [
         "code-reviewer"
@@ -161,7 +163,8 @@
       "skills": [
         "wf-approve",
         "wf-reject",
-        "wf-gate-brief"
+        "wf-gate-brief",
+        "bmad-walkthrough"
       ],
       "rules": [
         "Gate brief format"
@@ -210,7 +213,8 @@
       "wf-abort",
       "wf-unblock",
       "wf-goto",
-      "wf-profile"
+      "wf-profile",
+      "bmad-project-context"
     ]
   }
 }

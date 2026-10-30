@@ -37,6 +37,7 @@ An adapter returns `{ stdout, exitCode }` for the harness. Cursor's mapping:
 | `preToolUse`, `beforeShellExecution` | allow | `{"permission":"allow"}` | 0 |
 | `preToolUse`, `beforeShellExecution` | deny | `{"permission":"deny","user_message":m,"agent_message":m}` | 2 |
 | `stop` | allow with `followup` | `{"followup_message":f}` | 0 |
+| `subagentStart` | any | `{"permission":"allow"}` (a permission hook: unreadable output blocks the dispatch) | 0 |
 | anything else | any | `{}` | 0 |
 
 `status --hook` is rendered separately by `renderStatus(text)`. Cursor prints `{"additional_context":text}`.
@@ -91,7 +92,7 @@ Official docs: [cursor.com/docs/hooks](https://cursor.com/docs/hooks) (checked 2
 | `status` | — | `status` |
 | `durationMs` | — | `duration_ms` |
 
-Wiring: `.cursor/hooks.json` → `node .agent-workflow/wf.mjs log subagentStart|subagentStop` (stdout `{}`, exit 0; never deny work).
+Wiring: `.cursor/hooks.json` → `node .agent-workflow/wf.mjs log subagentStart|subagentStop` (stdout `{"permission":"allow"}` for start, `{}` for stop, exit 0; a failure to record never denies work).
 
 ### Claude Code (`SubagentStart` / `SubagentStop`)
 
@@ -132,3 +133,9 @@ Consequences for the installer (ToDo item 10):
 - A writer agent gets `tools: Read, Write, Edit, Grep, Glob`, with no `Bash`. The diff check (stage 5) covers anything written another way.
 - `requirements-ingestor` and `synthesizer` keep their MCP access with `mcp__<server>__*` entries, not a blanket allow.
 - Use `tools` for the allowlist. `disallowedTools: Bash` is an alternative for writers, and either form is valid. The installer uses `tools` so the list is explicit.
+
+## Cursor specifics
+
+- The `stop` guard acts only when Cursor's `status` is `completed`. An `aborted` (the human pressed stop) or `error` turn gets no follow-up.
+- `preToolUse` matches `Write|Delete`, Cursor's tool names for edits and deletes.
+- Cursor also runs Claude Code hooks from `.claude/settings.json` (third-party import, on by default). The Claude Code wiring passes `--from claude-code`. When `CURSOR_VERSION` is set and `.cursor/hooks.json` already wires `wf.mjs`, those commands exit 0 with no output, so no event is guarded, logged or counted twice.
