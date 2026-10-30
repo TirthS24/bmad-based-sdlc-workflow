@@ -131,6 +131,45 @@ sequenceDiagram
 
 The conductor **never** approves or rejects a gate itself. You type only at gates and for the human-only commands in `invocation.human_only` (`capabilities.json`); the conductor runs every other stage itself.
 
+## 4a. Profiles and auto-passed gates
+
+Each run has a profile. The profile says which stages run, which gates you must pass, what each stage may write, and which verify tiers run. The profiles are defined in `.agent-workflow/workflow.json` under `profiles`.
+
+| Stage / gate | `pm` (tickets to Jira) | `dev` (alpha bug) | `docs` | `full` |
+|---|---|---|---|---|
+| planning | runs | runs (one ticket, bug repro as the test) | runs | runs |
+| gate_spec | you (or auto: `planning_clean` in `dev`) | auto: `planning_clean` | you | you |
+| feasibility, gate_approach | skipped | runs; gate auto: `approach_low_risk` | skipped | runs; you |
+| tests, gate_tests | skipped | runs; gate auto: `red_for_right_reason` | skipped | runs; you |
+| implement, review | skipped | runs; gate_review auto: `no_open_high_or_decision` | implement writes `docs/**`; gate_review auto | runs; you |
+| verify | skipped | runs | runs `docs_lint` and `links` | runs |
+| gate_final | auto: `specs_only_unchanged` | you | you | you |
+| pr | runs (specs only) | runs | runs | runs |
+
+**Rules for an auto-pass.** A gate passes without you only when all of these hold:
+
+1. The profile lists the gate under `auto`.
+2. The stage before it passed its check in the same `done`, or the gate before it was just approved.
+3. Nobody has rejected the gate, and no goto has reset it in this run. Once you step in, it stays yours.
+4. No escalation is pending.
+5. The gate's condition holds (below).
+
+When an auto-pass is declined, the status line and the `next_action` say why, for example `Auto-pass not applied: migration: yes`. Each gate's approval is recorded as `approved_by: "human"` or `approved_by: "auto"` with its condition and reason.
+
+**Conditions.**
+
+- `planning_clean`: planning checks pass and every question is answered.
+- `approach_low_risk`: the architect's `approach.md` has a verdict of `as-is` or `with-changes`, a `Decision` block naming a recommended approach, and `public_contract_change`, `migration` and `new_dependency` all `no`. Every file it lists is inside the implement scope and outside the product tests. The recommended approach becomes the gate's approach.
+- `red_for_right_reason`: the new tests failed for the right reason. A bug fix with nothing planned to run is declined.
+- `no_open_high_or_decision`: no open `high` or `decision-needed` review finding.
+- `specs_only_unchanged` (`pm`'s final gate): only `specs/spec-<id>/**` changed, and the SRS and tickets match what `gate_spec` approved.
+
+**Gate decisions in the PR.** The PR body's `## Gates` table lists every gate: who passed it, the condition and reason for an auto-pass, and the time. Skipped gates show `skipped (profile)`. Profile changes are listed too.
+
+**Checking a stage.** `node .agent-workflow/wf.mjs check [stage] [--result <path>]` runs a stage's check without moving the run. It prints every problem as `✗ <rule>: found <x>; expected <y>. Example: <z>`. For the next gate, it previews whether the auto-pass would apply now.
+
+**Conductor-run stages.** The conductor runs every stage except the gates and the human-only commands (`invocation.human_only` in `capabilities.json`). Sub-agents that write an artifact write it to a fixed path themselves. The conductor checks it with `wf check`, and sends any problem back to the same agent, at most twice, before `/wf-unblock`. Nobody hand-edits an agent's artifact.
+
 ## 4. One-time setup
 
 Prerequisites: Cursor with project skills + subagents enabled (or Claude Code), Node.js 20.12+, Git, `gh` logged in with a GitHub `origin` remote, `uv` (for BMAD skills).
@@ -224,6 +263,7 @@ node .agent-workflow/wf.mjs status
 | `/wf-pause`, `/wf-resume`, `/wf-abort` | human | Archive, restore or stop a run. |
 | `/wf-onboard` | human | Project context and rule packs after `wf init`. |
 | `/wf-goto` | human | Jump stages (see below). |
+| `/wf-profile <name>` | human | Switch the run profile while planning runs or before `gate_spec` is approved. |
 | Stage skills `/wf-start`, `-research`, `-spec-review`, `-feasibility`, `-tests`, `-implement`, `-review`, `-verify`, `-pr` | conductor | Invoked by the pipeline; you rarely type them. |
 
 **CLI (`node .agent-workflow/wf.mjs ...`)**
@@ -236,6 +276,9 @@ node .agent-workflow/wf.mjs status
 | `brief [gate]` | Facts for the gate you're at. |
 | `goto <stage>` | Backwards always works; forwards only over stages whose artifact passes and never over an unapproved gate. |
 | `escalation list\|retry\|reject\|abort` | Get out of a loop-cap/stuck stop. |
+| `run --profile <name>` | Start a run under a profile (`full`, `pm`, `dev`, `docs`). |
+| `profile <name>` | Switch the profile (human-only; see section 4a). |
+| `check [stage] [--result <path>]` | Run a stage's check without advancing; print every problem; preview the next gate's auto-pass. |
 | `adr` | Copy the run's decision record to `docs/adr/NNNN-<slug>.md`. |
 | `doctor` | Check capabilities, skills, agents, standards agree. |
 | `login`, `sync`, `whoami`, `logout`, `report-failure` | Telemetry. |

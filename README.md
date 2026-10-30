@@ -95,9 +95,27 @@ Every stage exit has a human gate except `implement`, which loops on its own (re
 | `/wf-approve <gate>` | human | passes a gate; `gate_approach` also records approach A, B, or C; `gate_final` unlocks commit, push, and PR |
 | `/wf-reject <gate> <reason>` | human | sends the run back to the stage before the gate, with the reason (`gate_review` goes back to `implement`) |
 | `/wf-pr` | main thread | commit on the run branch, write a plain-language change summary, then `wf pr` pushes it and runs `gh pr create` |
+| `/wf-profile <name>` | human | switch the run profile (planning, or before `gate_spec` is approved) |
 | `/wf-pause`, `/wf-resume`, `/wf-abort` | human | archive, restore, or stop the run |
 
 Advance a stage only with `node .agent-workflow/wf.mjs done <stage> --result <path>`. The CLI checks the postcondition and refuses to move on if it fails.
+
+### Run profiles and auto-passed gates
+
+A run has a profile: `full` (the default), `pm` (tickets only, for Jira), `dev` (an alpha bug) or `docs` (documentation only). Choose it with `wf run --profile <name>`, or switch it with `/wf-profile` while planning runs or before `gate_spec` is approved. The conductor never switches it.
+
+| Stage / gate | `pm` (tickets to Jira) | `dev` (alpha bug) | `docs` | `full` |
+|---|---|---|---|---|
+| planning | runs | runs (one ticket, bug repro as the test) | runs | runs |
+| gate_spec | you (or auto: `planning_clean` in `dev`) | auto: `planning_clean` | you | you |
+| feasibility, gate_approach | skipped | runs; gate auto: `approach_low_risk` | skipped | runs; you |
+| tests, gate_tests | skipped | runs; gate auto: `red_for_right_reason` | skipped | runs; you |
+| implement, review | skipped | runs; gate_review auto: `no_open_high_or_decision` | implement writes `docs/**`; gate_review auto | runs; you |
+| verify | skipped | runs | runs `docs_lint` and `links` | runs |
+| gate_final | auto: `specs_only_unchanged` | you | you | you |
+| pr | runs (specs only) | runs | runs | runs |
+
+A profile can pass a gate without you when its rule holds (for example `approach_low_risk` in `dev` only when the architect's decision block says no contract, migration or dependency change). An auto-pass is recorded with its reason and listed in the PR body's `## Gates` table. A declined auto-pass stays with you and the status line says why. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) section 4a.
 
 ## Commands for the human
 
@@ -107,6 +125,9 @@ Advance a stage only with `node .agent-workflow/wf.mjs done <stage> --result <pa
 | `wf goto <stage>` | Jump to another stage. Backwards always works. Forwards only over stages whose artifact passes its check, and never over an unapproved gate. |
 | `wf escalation list\|retry\|reject\|abort` | Get out of a loop-cap or stuck-loop stop. `retry` resets the loop, `reject` returns to the previous gate's stage, `abort` ends the run. `/wf-unblock` explains the options. |
 | `wf adr` | Copies the run's two-line decision record into `docs/adr/NNNN-<slug>.md`. `wf pr` refuses to open the PR until that file is committed. |
+| `wf run --profile <name>` | Starts a run under a profile: `full` (default), `pm`, `dev` or `docs`. |
+| `wf profile <name>` | Human-only: switch the profile while planning runs or before `gate_spec` is approved. |
+| `wf check [stage] [--result <path>]` | Runs a stage's postcondition without advancing, and prints the problems. For the next gate, it also previews whether the profile would auto-pass it. |
 | `wf doctor` | Checks that `capabilities.json`, the skills, the agents and `standards.md` agree. Run it after editing any of them. |
 
 `.agent-workflow/capabilities.json` maps each stage to its skills, agents, rule sections and artifact check.

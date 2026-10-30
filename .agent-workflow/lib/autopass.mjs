@@ -136,14 +136,14 @@ function setCurrent(state, stage, action) {
 export function advanceAfter(fromId, state, workflow, config) {
   const notes = [];
   const events = [];
-  let next = nextStage(fromId, state, workflow);
+  let next = nextStage(fromId, state, workflow, events);
   if (stageById(workflow, next)?.executor === 'human' && profileOf(state, workflow).auto?.[next]) {
     const d = evaluateAuto(next, state, workflow, config);
     if (d.passed) {
       recordAuto(state, next, d);
       events.push({ type: 'approve', data: { gate: next, by: 'auto', condition: d.condition } });
       notes.push(`✓ ${next} auto-passed: ${d.reason}`);
-      next = nextStage(next, state, workflow);
+      next = nextStage(next, state, workflow, events);
     } else {
       state.gates[next].auto_declined = { condition: d.condition, reason: d.reason, at: new Date().toISOString() };
       events.push({ type: 'gate_auto_declined', data: { gate: next, condition: d.condition } });

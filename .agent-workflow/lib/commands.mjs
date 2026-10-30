@@ -127,13 +127,14 @@ export function cmdDone(stage, resultPath) {
   const next = state.current.stage;
   for (const n of notes) process.stdout.write(`${n}\n`);
   saveState(state);
-  for (const e of events) appendEvent(e.type, e.data);
   appendEvent('done', {
     stage,
     next,
     result: resultPath || null,
     ...(stage === 'planning' ? { human_escalations: escalationCount(state) } : {}),
   });
+  // After the done event: the stage clock is still this stage when done is mapped.
+  for (const e of events) appendEvent(e.type, e.data);
   process.stdout.write(`${formatStatus(state)}\n`);
 }
 

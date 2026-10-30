@@ -21,7 +21,8 @@ const skipsStage = (profile, id) => (profile.skip || []).includes(id);
 
 // The stage or gate after `fromId`, skipping whatever the profile skips. Skipped records are kept
 // in state so the status and the PR body can show them.
-export function nextStage(fromId, state, workflow) {
+// Skipped stages are reported into `events` when the caller passes it (recorded after the state is saved).
+export function nextStage(fromId, state, workflow, events = null) {
   const profile = profileOf(state, workflow);
   let id = stageById(workflow, fromId).next;
   while (skipsStage(profile, id)) {
@@ -30,7 +31,8 @@ export function nextStage(fromId, state, workflow) {
       if (state.gates[id]?.status !== 'approved') state.gates[id] = { status: 'skipped' };
     } else if (state.stages[id]?.status !== 'skipped') {
       state.stages[id] = { status: 'skipped', reason: `profile ${profile.name}` };
-      appendEvent('stage_skipped', { stage: id });
+      if (events) events.push({ type: 'stage_skipped', data: { stage: id } });
+      else appendEvent('stage_skipped', { stage: id });
     }
     id = stg.next;
   }

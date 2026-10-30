@@ -1,7 +1,7 @@
 // Stage 11: the server accepts the new event types and its views return rows for them.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ev, startPostgres, startStack, uuid } from './helpers.mjs';
+import { ev, startPostgres, startStack } from './helpers.mjs';
 
 const pg = await startPostgres();
 test.after(() => pg.stop());
@@ -43,5 +43,4 @@ test('views: agent_timings, run_human_escalations and gate_decisions return rows
   assert.deepEqual(esc, [{ count: 3 }]);
   const gates = (await s.pool.query("SELECT gate, by, condition FROM gate_decisions WHERE run_id = 'run-v2'")).rows;
   assert.deepEqual(gates, [{ gate: 'gate_spec', by: 'auto', condition: 'planning_clean' }]);
-  assert.ok(uuid);
 });
