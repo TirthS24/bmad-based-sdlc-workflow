@@ -71,7 +71,7 @@ export function cmdStatus(flags, adapter) {
     if (!state?.run?.id) process.exit(0);
     const cfg = loadConfig();
     const stg = state.current.stage;
-    if (stg === 'implement' && state.loops.implement.round >= (cfg.loop_caps?.implement ?? 5)) {
+    if (stg === 'implement' && state.loops.implement.round >= (profileOf(state, loadWorkflow()).loop_caps?.implement ?? cfg.loop_caps?.implement ?? 5)) {
       process.stderr.write('implement loop cap hit\n');
       process.exit(1);
     }

@@ -27,7 +27,7 @@ export function nextStage(fromId, state, workflow) {
   while (skipsStage(profile, id)) {
     const stg = stageById(workflow, id);
     if (stg.executor === 'human') {
-      state.gates[id] = { status: 'skipped' };
+      if (state.gates[id]?.status !== 'approved') state.gates[id] = { status: 'skipped' };
     } else if (state.stages[id]?.status !== 'skipped') {
       state.stages[id] = { status: 'skipped', reason: `profile ${profile.name}` };
       appendEvent('stage_skipped', { stage: id });

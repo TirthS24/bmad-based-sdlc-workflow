@@ -113,9 +113,10 @@ function implementStop(input, state, config, workflow) {
 // Files the run may change: the writes of every stage up to the current one, plus the run's artifacts.
 export function allowedScope(state, workflow, config) {
   const patterns = [];
+  const skipped = profileOf(state, workflow).skip || [];
   for (const stg of workflow.stages) {
-    // Negations are for the current stage only (frozen tests), so they are not unioned.
-    patterns.push(...effectiveWrites(stg.id, state, workflow, config).filter((p) => !p.startsWith('!')));
+    // A stage the profile skips writes nothing. Negations are for the current stage only (frozen tests), so they are not unioned.
+    if (!skipped.includes(stg.id)) patterns.push(...effectiveWrites(stg.id, state, workflow, config).filter((p) => !p.startsWith('!')));
     if (stg.id === state.current.stage) break;
   }
   return [...patterns, `specs/spec-${state.run.id}/**`, `.agent-workflow/runs/${state.run.id}/**`];

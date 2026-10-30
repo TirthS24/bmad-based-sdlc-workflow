@@ -121,7 +121,7 @@ const NEVER_SKIPPED = ['planning', 'gate_spec', 'gate_final', 'pr'];
 const KNOWN_TIERS = ['unit', 'lint', 'typecheck', 'format', 'complexity', 'e2e', 'a11y', 'docs_lint', 'links'];
 const WRITE_TOKEN = /^!?<(test_globs|product_test_globs|unit_test_globs|src_globs|docs_globs|run_dir)>$/;
 
-export function profileProblems(workflow) {
+export function profileProblems(workflow, config = {}) {
   const out = [];
   const stageIds = workflow.stages.map((s) => s.id);
   const gateIds = workflow.stages.filter((s) => s.executor === 'human').map((s) => s.id);
@@ -129,6 +129,8 @@ export function profileProblems(workflow) {
     const at = `profile ${name}`;
     const skip = p.skip || [];
     const auto = p.auto || {};
+    for (const id of skip) if (!stageIds.includes(id)) out.push(`${at}: skip names unknown stage ${id}`);
+    if (Object.values(p.writes || {}).flat().includes('<docs_globs>') && !(config.docs_globs || []).length) out.push(`${at}: <docs_globs> is used but config.docs_globs is empty`);
     for (const id of skip) if (NEVER_SKIPPED.includes(id)) out.push(`${at}: ${id} cannot be skipped`);
     if (name === 'full' && (skip.length || Object.keys(auto).length)) out.push('profile full must not skip or auto-pass anything');
     for (const [gate, cond] of Object.entries(auto)) {
