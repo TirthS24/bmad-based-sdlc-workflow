@@ -65,7 +65,7 @@ export function checkFeasibility(state) {
   const approaches = (text.match(/^#{2,3}\s+.+/gm) || []).filter((h) => !/^#{2,3}\s+\W*(Decision|Non-functional|Risks|Rollback)\b/i.test(h));
   const named = (text.match(/\bapproach\s+[ABC1-3]\b/gi) || []).length;
   if (approaches.length < 2 && named < 2) {
-    problems.push(problem('two approaches', `${Math.max(approaches.length, named)}`, 'at least 2 approaches', '### Approach A: extend the existing service'));
+    problems.push(problem('two approaches', `${Math.max(approaches.length, named)} approach headings`, 'at least 2 approaches', '### Approach A: extend the existing service'));
   }
   if (!/one commit|single-commit|split/i.test(text)) {
     problems.push(problem('single-commit fit line', 'no such line', 'a line saying the change fits one commit, or how it splits', 'Fits one commit: yes'));
@@ -115,6 +115,7 @@ const AXES = ['Standards', 'Spec conformance', 'Approach conformance', 'Test qua
 const TAGGED = /^\s*[-*]\s*(\[\s*(low|medium|high|decision-needed)\s*\]|\*{0,2}(low|medium|high|decision-needed)\*{0,2}\s*[:—-])/i;
 
 export function checkReviewToVerify(resultPath) {
+  if (!resultPath) return [problem('review output path given', 'no --result', '--result <review file>', 'wf check review --result review.md')];
   const text = readText(resultPath);
   if (text == null) return [problem('review output exists', `no file at ${resultPath}`, 'the code-reviewer output path', 'review.md')];
   const problems = [];
@@ -137,18 +138,19 @@ export function checkReviewToVerify(resultPath) {
 // The tier results of the last verify check, so `done verify` can record them for the PR body.
 export const lastVerify = { tiers: [] };
 
-export function checkVerifyToGate(state, resultPath) {
+// dryRun (used by `wf check`) re-runs the tiers but writes nothing and leaves lastVerify alone.
+export function checkVerifyToGate(state, resultPath, { dryRun = false } = {}) {
   const missing = e2eNotConfigured(state, loadConfig());
   if (missing) return [problem('e2e command configured', missing, 'commands.e2e in config.json', 'npx playwright test --reporter=list,json')];
   const results = runVerifyTiers(ALL_TIERS);
-  lastVerify.tiers = results.map(({ tier, skipped, code }) => ({ tier, skipped, code }));
+  if (!dryRun) lastVerify.tiers = results.map(({ tier, skipped, code }) => ({ tier, skipped, code }));
   const failed = results.find((r) => !r.skipped && r.code !== 0);
   if (failed) return [problem(`${failed.tier} tier`, `exit ${failed.code}`, 'exit 0', `npm run ${failed.tier}`)];
   if (!results.find((r) => r.tier === 'e2e').skipped) {
     const tests = readE2eReport(e2eReportPath());
     const err = checkE2eCoverage(state, tests);
     if (err) return [problem('e2e covers every automated scenario', err, 'a passing test for each PRD-n.m scenario', 'PRD-1.1 REQ-1 ...')];
-    fs.writeFileSync(path.join(PATHS.runs, state.run.id, 'evidence', 'e2e-summary.md'), e2eSummary(tests));
+    if (!dryRun) fs.writeFileSync(path.join(PATHS.runs, state.run.id, 'evidence', 'e2e-summary.md'), e2eSummary(tests));
   }
   const evidence = resultPath
     ? (path.isAbsolute(resultPath) ? resultPath : path.join(REPO_ROOT, resultPath))
@@ -179,7 +181,10 @@ export function checkPrToDone(state, resultPath) {
 }
 
 // Stages that have a postcondition; the list is the same order as the workflow.
-export function postcondition(fromStage, state, resultPath) {
+// Stages that have a check. Human gates and `done` do not.
+export const CHECKED_STAGES = ['planning', 'feasibility', 'tests', 'implement', 'review', 'verify', 'pr'];
+
+export function postcondition(fromStage, state, resultPath, opts = {}) {
   switch (fromStage) {
     case 'planning':
       return checkPlanning(state);
@@ -192,7 +197,7 @@ export function postcondition(fromStage, state, resultPath) {
     case 'review':
       return checkReviewToVerify(resultPath);
     case 'verify':
-      return checkVerifyToGate(state, resultPath);
+      return checkVerifyToGate(state, resultPath, opts);
     case 'pr':
       return checkPrToDone(state, resultPath);
     default:

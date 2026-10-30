@@ -14,7 +14,7 @@ import { rewind } from './rewind.mjs';
 import { PATHS, REPO_ROOT, posixRel, specDir } from './paths.mjs';
 import { adrCommitted } from './adr.mjs';
 import { buildPrBody, decisionRecord, prSummaryPath, prTitle } from './pr.mjs';
-import { commitsSince, lastVerify, postcondition } from './postconditions.mjs';
+import { CHECKED_STAGES, commitsSince, lastVerify, postcondition } from './postconditions.mjs';
 import { formatProblems } from './problems.mjs';
 import {
   checkQuestions, checkTickets, escalationCount, srsSectionChecks, ticketsHash,
@@ -115,14 +115,18 @@ export function cmdDone(stage, resultPath) {
   process.stdout.write(`${formatStatus(state)}\n`);
 }
 
-// `wf check [stage] [--result <path>]`: run a stage's postcondition without advancing. Defaults to
-// the current stage. Works for an earlier stage too, so an agent's artifact can be checked on its own.
+// `wf check [stage] [--result <path>]`: run a stage's postcondition without advancing or writing
+// state. Defaults to the current stage. Works for an earlier stage too, so an agent's artifact can be
+// checked on its own. For verify it re-runs the tiers (the commands run, but nothing is recorded).
 export function cmdCheck(stage, resultPath) {
   const state = loadState();
   if (!state?.run?.id) die('no active run');
   const target = stage || state.current.stage;
-  if (!stageById(loadWorkflow(), target)) die(`unknown stage ${target}`);
-  const problems = postcondition(target, state, resultPath);
+  const stg = stageById(loadWorkflow(), target);
+  if (!stg) die(`unknown stage ${target}`);
+  if (stg.executor === 'human') die(`${target} is a human gate, not a check. Use wf approve or wf reject.`);
+  if (!CHECKED_STAGES.includes(target)) die(`${target} has no postcondition to check`);
+  const problems = postcondition(target, state, resultPath, { dryRun: true });
   if (problems.length) {
     process.stderr.write(`${formatProblems(problems)}\n`);
     process.exit(1);
