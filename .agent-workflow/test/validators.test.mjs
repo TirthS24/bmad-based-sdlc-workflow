@@ -21,6 +21,12 @@ test('capabilityBlock: only the REQ definition line counts, and REQ-1 never matc
   assert.equal(capabilityBlock(text, 'REQ-2'), '');
 });
 
+test('capabilityBlock: blank lines and indentation before the definition do not empty the block', () => {
+  const text = 'intro\n\n\n- **REQ-1** a **success:** x\n- **REQ-2** b\n\n\n  - **REQ-3** c **success:** y';
+  assert.match(capabilityBlock(text, 'REQ-1'), /^- \*\*REQ-1\*\* a \*\*success:\*\* x$/);
+  assert.match(capabilityBlock(text, 'REQ-3'), /^  - \*\*REQ-3\*\* c/);
+});
+
 test('srsSectionChecks: numbered headings with a dot, a parenthesis or nothing are all accepted', () => {
   const text = [
     '## 1. Introduction', '## 2) Overall description', '## 3 Functional requirements',

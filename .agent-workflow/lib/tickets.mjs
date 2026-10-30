@@ -61,7 +61,7 @@ export function srsSectionChecks(text) {
 // The block for one REQ: its definition line (`- **REQ-n**`) up to the next REQ or heading. A
 // mention elsewhere does not count, and REQ-1 does not match inside REQ-10.
 export function capabilityBlock(text, id) {
-  const def = new RegExp(`^\\s*-\\s*\\*\\*${id}(?!\\d)`, 'm').exec(text);
+  const def = new RegExp(`^[ \\t]*-[ \\t]*\\*\\*${id}(?!\\d)`, 'm').exec(text);
   if (!def) return '';
   const body = text.slice(def.index + 1);
   const next = body.search(/\n(?=\s*-\s*\*\*REQ-\d|#{1,3}\s)/);
