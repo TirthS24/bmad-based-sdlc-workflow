@@ -82,7 +82,12 @@ export function cmdStatus(flags, adapter) {
 
 // A stage may change only the files its writes allow (and the run's artifacts), checked against the diff.
 function scopeProblems(state, workflow, config) {
-  const bad = scopeViolations(state, workflow, config);
+  let bad;
+  try {
+    bad = scopeViolations(state, workflow, config);
+  } catch (err) {
+    return [problem('scope check can read the baseline', err.message, 'a readable baseline commit', `git cat-file -t ${state.run.baseline_sha || '<sha>'}`)];
+  }
   if (!bad.length) return [];
   return [problem('writes stay in scope', bad.join(', '), `only ${allowedScope(state, workflow, config).join(', ')}`, 'specs/spec-<id>/SRS.md for planning')];
 }

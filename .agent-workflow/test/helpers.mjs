@@ -147,6 +147,9 @@ export function makeRepo() {
   const git = (...args) => spawnSync('git', [...GIT, ...args], { cwd: root, encoding: 'utf8' });
   git('init', '-q');
   git('commit', '--allow-empty', '-q', '-m', 'init');
+  // The copied workflow config is part of the baseline, so only the test's own writes show in the scope check.
+  git('add', '-A');
+  git('commit', '-q', '-m', 'workflow config');
 
   const env = { ...process.env, WF_DIR: wfDir, REPO_ROOT: root, WF_NO_AUTOSYNC: '1' };
   const prevRoot = process.env.REPO_ROOT;
@@ -205,6 +208,18 @@ export function makeRepo() {
         cfg[k] = (v && typeof v === 'object' && !Array.isArray(v)) ? { ...cfg[k], ...v } : v;
       }
       fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
+      // A config change is a human decision made before the run. Commit it and, if a run is active,
+      // move its baseline past it, so the scope check only sees the stage's own writes.
+      git('add', '-A');
+      git('commit', '-q', '-m', 'config');
+      const sfile = path.join(wfDir, 'state.json');
+      if (fs.existsSync(sfile)) {
+        const s = JSON.parse(fs.readFileSync(sfile, 'utf8'));
+        if (s.run?.id) {
+          s.run.baseline_sha = git('rev-parse', 'HEAD').stdout.trim();
+          fs.writeFileSync(sfile, `${JSON.stringify(s, null, 2)}\n`);
+        }
+      }
     },
     events() {
       const file = path.join(wfDir, 'events.jsonl');

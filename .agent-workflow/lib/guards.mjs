@@ -120,15 +120,19 @@ export function allowedScope(state, workflow, config) {
   return [...patterns, `specs/spec-${state.run.id}/**`, `.agent-workflow/runs/${state.run.id}/**`];
 }
 
-// Tracked changes since the baseline plus untracked files. The diff backstops shell writes.
+// Workflow runtime files change on every wf command, so they are not product changes.
+const RUNTIME = /^\.agent-workflow\/(state\.json|events\.jsonl|queue\/|runs\/)/;
+
+// Tracked changes since the baseline plus untracked files, as NUL-separated git output so quoted
+// or unusual paths survive. Throws when git cannot read the baseline: a silent pass would hide writes.
 export function changedFiles(state) {
   const base = state.run.baseline_sha;
-  if (!base) return [];
-  const tracked = git(['diff', '--name-only', base]).stdout || '';
-  const untracked = git(['ls-files', '--others', '--exclude-standard']).stdout || '';
-  // Workflow internals (state, events, queue, config) are not product changes; the protected-file guard covers them.
-  const files = new Set(`${tracked}\n${untracked}`.split('\n').map((s) => s.trim()).filter(Boolean));
-  return [...files].filter((rel) => !rel.startsWith('.agent-workflow/'));
+  if (!base) throw new Error('run has no baseline_sha');
+  const diff = git(['diff', '-z', '--name-only', base]);
+  if (diff.status !== 0) throw new Error(`git diff against ${base} failed: ${(diff.stderr || '').trim()}`);
+  const untracked = git(['ls-files', '-z', '--others', '--exclude-standard']);
+  const files = new Set([...(diff.stdout || '').split('\0'), ...(untracked.stdout || '').split('\0')].filter(Boolean));
+  return [...files].filter((rel) => !RUNTIME.test(rel));
 }
 
 export function scopeViolations(state, workflow, config) {
@@ -140,7 +144,12 @@ export function scopeViolations(state, workflow, config) {
 // Stop hook: a stray write is reported in the same turn. It adds to the follow-up and never blocks.
 export function guardStop(input, state, config, workflow) {
   const res = implementStop(input, state, config);
-  const out = scopeViolations(state, workflow, config);
+  let out;
+  try {
+    out = scopeViolations(state, workflow, config);
+  } catch (err) {
+    return allow({ followup: [res.followup, `Could not check write scope: ${err.message}.`].filter(Boolean).join(' ') });
+  }
   if (!out.length) return res;
   const note = `Out-of-scope changes in ${state.current.stage}: ${out.join(', ')}. Revert them, or ask the human if they are needed.`;
   return allow({ followup: [note, res.followup].filter(Boolean).join(' ') });

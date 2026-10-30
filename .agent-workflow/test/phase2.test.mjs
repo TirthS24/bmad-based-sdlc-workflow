@@ -34,12 +34,14 @@ process.exit(specs.some(([, st]) => st === 'unexpected') ? 1 : 0);
 function setup(t) {
   const ctx = withRun(t);
   const { repo } = ctx;
+  repo.file('.agent-workflow/fake-pw.mjs', FAKE_PW);
+  repo.git('add', '-A');
+  repo.git('commit', '-q', '-m', 'fake e2e');
   repo.config({
     product_test_globs: ['E2E/tests/**'],
     unit_test_globs: ['tests/**/*.py'],
     commands: { unit: '', lint: '', e2e: 'node .agent-workflow/fake-pw.mjs' },
   });
-  repo.file('.agent-workflow/fake-pw.mjs', FAKE_PW);
   repo.seedPlanning(ctx.id);
   repo.file(`specs/spec-${ctx.id}/tickets/be/TKT-BE-001.json`, `${JSON.stringify({
     ...VALID_TICKET_BE,
