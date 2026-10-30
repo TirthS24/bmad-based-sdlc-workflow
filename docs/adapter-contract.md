@@ -127,8 +127,8 @@ Source: Claude Code subagent documentation (code.claude.com/docs/en/sub-agents).
 - MCP names: `mcp__<server>` or `mcp__<server>__<tool>`. Wildcards: `mcp__<server>__*`. A server name containing `__` needs the full name with `__*` in `tools`.
 - Preload skills with `skills`, not by listing `Skill` in `tools`.
 
-Consequences for the installer (chunk 10):
-- A read-only agent (`readonly: true`) becomes `tools: Read, Grep, Glob` (plus `Bash` only where the agent needs it, which read-only agents do not). The installer test asserts there is no `Write`, `Edit` or `Bash`.
+Consequences for the installer (ToDo item 10):
+- An agent with `readonly: true` that writes no artifact (`requirements-griller`, `requirements-synthesizer`) becomes `tools: Read, Grep, Glob`. The installer test asserts there is no `Write`, `Edit` or `Bash`. The translation keys on whether the agent writes an artifact, not on its `readonly` flag, so `product-researcher`, `solution-architect` and `code-reviewer` get the writer list below.
 - A writer agent gets `tools: Read, Write, Edit, Grep, Glob`, with no `Bash`. The diff check (stage 5) covers anything written another way.
 - `requirements-ingestor` and `synthesizer` keep their MCP access with `mcp__<server>__*` entries, not a blanket allow.
 - Use `tools` for the allowlist. `disallowedTools: Bash` is an alternative for writers, and either form is valid. The installer uses `tools` so the list is explicit.
