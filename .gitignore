@@ -13,3 +13,10 @@ _bmad/**/*.user.toml
 
 # Local dependencies
 node_modules/
+
+# Local telemetry queue (events wait here until the server acknowledges them)
+.agent-workflow/queue/
+
+# Playwright output from the server test run
+server/test-results/
+server/playwright-report/
