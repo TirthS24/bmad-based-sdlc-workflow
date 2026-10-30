@@ -21,12 +21,15 @@ export const ERROR_CLASSES = ['test_failure', 'agent_crash', 'timeout', 'guard_b
 
 // The only attributes that may leave the machine, per event type. `reason` is free text.
 const ALLOWED = {
-  run_started: ['project', 'harness'],
+  run_started: ['project', 'harness', 'profile'],
   run_ended: ['status'],
   stage_started: [],
   stage_completed: ['duration_ms'],
   gate_requested: ['gate'],
-  gate_approved: ['gate', 'wait_ms'],
+  gate_approved: ['gate', 'wait_ms', 'by', 'condition'],
+  // Reasons are free text and can name paths, so only the condition name is sent.
+  gate_auto_declined: ['gate', 'condition'],
+  stage_skipped: ['stage'],
   gate_rejected: ['gate', 'wait_ms', 'count', 'reason'],
   loop_round: ['round', 'cap'],
   agent_failed: ['agent', 'error_class'],
@@ -71,7 +74,7 @@ export function mapLocal(type, extra, state, ms) {
   switch (type) {
     case 'run':
       return [
-        { type: 'run_started', stage: 'planning', attrs: { project: path.basename(REPO_ROOT), harness } },
+        { type: 'run_started', stage: 'planning', attrs: { project: path.basename(REPO_ROOT), harness, profile: extra.profile } },
         ...(CONTENT_HOOKS[harness] === false ? [{ type: 'session_unchecked', attrs: { harness } }] : []),
         { type: 'stage_started', stage: 'planning', attrs: {} },
       ];
@@ -96,8 +99,13 @@ export function mapLocal(type, extra, state, ms) {
       return out;
     }
     case 'approve':
-      return [{ type: 'gate_approved', stage: extra.gate, attrs: { gate: extra.gate, wait_ms: ms } },
-        { type: 'stage_started', stage: cur, attrs: {} }];
+      return [{ type: 'gate_approved', stage: extra.gate, attrs: { gate: extra.gate, wait_ms: ms, by: extra.by || 'human', condition: extra.condition } },
+        // A human approval moves the run on; an auto-pass is recorded alongside the human approval that caused it.
+        ...(extra.by === 'auto' ? [] : [{ type: 'stage_started', stage: cur, attrs: {} }])];
+    case 'stage_skipped':
+      return [{ type: 'stage_skipped', stage: extra.stage, attrs: { stage: extra.stage } }];
+    case 'gate_auto_declined':
+      return [{ type: 'gate_auto_declined', stage: extra.gate, attrs: { gate: extra.gate, condition: extra.condition } }];
     case 'reject':
       return [{ type: 'gate_rejected', stage: extra.gate, attrs: { gate: extra.gate, wait_ms: ms, count: extra.count, reason: state?.rejections?.at(-1)?.reason } },
         { type: 'stage_started', stage: cur, attrs: {} }];
@@ -128,7 +136,7 @@ export function mapLocal(type, extra, state, ms) {
       return [{ type: 'run_ended', attrs: { status: 'paused' } }, ...agentNoStopEvents(state)];
     case 'subagent_start':
       if (state?.run?.id && extra.agent) {
-        pushSubagentStart(state.run.id, extra.agent, extra.started_at || new Date().toISOString());
+        pushSubagentStart(state.run.id, extra.agent, extra.started_at || new Date().toISOString(), extra.subagent_id);
       }
       return [];
     case 'subagent_stop': {
@@ -139,8 +147,8 @@ export function mapLocal(type, extra, state, ms) {
       if (!startedAt && extra.durationMs != null) {
         startedAt = new Date(Date.parse(endedAt) - extra.durationMs).toISOString();
       }
-      if (!startedAt) startedAt = popSubagentStop(runId, extra.agent);
-      else popSubagentStop(runId, extra.agent);
+      const paired = popSubagentStop(runId, extra.agent, extra.subagent_id);
+      if (!startedAt) startedAt = paired;
       const durationMs = extra.durationMs ?? (startedAt ? Date.parse(endedAt) - Date.parse(startedAt) : null);
       return [{
         type: 'agent_run',

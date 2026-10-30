@@ -5,7 +5,7 @@ import { HttpError } from './auth.mjs';
 export const EVENT_TYPES = new Set([
   'run_started', 'run_ended', 'stage_started', 'stage_completed', 'gate_requested', 'gate_approved',
   'gate_rejected', 'loop_round', 'agent_failed', 'guard_blocked', 'error', 'scrub_hit', 'session_unchecked',
-  'human_escalations', 'agent_run',
+  'human_escalations', 'agent_run', 'stage_skipped', 'gate_auto_declined',
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

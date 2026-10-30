@@ -62,7 +62,7 @@ export function cmdRun(source, { profile } = {}) {
   run.profile_changes = [];
   const state = emptyState(run, loadWorkflow());
   saveState(state);
-  appendEvent('run', { id, source: run.source });
+  appendEvent('run', { id, source: run.source, profile: profileChosen });
   process.stdout.write(`${formatStatus(state)}\n`);
 }
 
@@ -123,10 +123,11 @@ export function cmdDone(stage, resultPath) {
   };
   if (stage === 'tests') state.stages.tests.check = nothingPlanned(state, loadConfig()) ? 'nothing_planned' : 'red_ok';
   if (stage === 'verify') state.stages.verify.tiers = lastVerify.tiers;
-  const notes = advanceAfter(stage, state, workflow, loadConfig());
+  const { notes, events } = advanceAfter(stage, state, workflow, loadConfig());
   const next = state.current.stage;
   for (const n of notes) process.stdout.write(`${n}\n`);
   saveState(state);
+  for (const e of events) appendEvent(e.type, e.data);
   appendEvent('done', {
     stage,
     next,
@@ -222,9 +223,11 @@ export function cmdApprove(gate, approach) {
     approach_hash: fileHashIfExists(`${dir}/approach.md`),
     tickets_hash: ticketsHash(state),
   };
-  appendEvent('approve', { gate, by: 'human', ...(gate === 'gate_approach' ? { approach } : {}) });
-  const notes = advanceAfter(gate, state, workflow, loadConfig());
+  const { notes, events } = advanceAfter(gate, state, workflow, loadConfig());
   saveState(state);
+  // The human approval is recorded first (telemetry reads the saved state), then any auto-pass after it.
+  appendEvent('approve', { gate, by: 'human', ...(gate === 'gate_approach' ? { approach } : {}) });
+  for (const e of events) appendEvent(e.type, e.data);
   for (const n of notes) process.stdout.write(`${n}\n`);
   process.stdout.write(`${formatStatus(state)}\n`);
 }
@@ -363,7 +366,7 @@ export function cmdGuard(event, adapter) {
 export function cmdLog(event, adapter, input) {
   const i = input || adapter.normalize(event, parseHookPayload(readStdin()));
   if (event === 'subagentStart') {
-    appendEvent('subagent_start', { agent: i.agent, started_at: new Date().toISOString() });
+    appendEvent('subagent_start', { agent: i.agent, started_at: new Date().toISOString(), subagent_id: i.subagentId || undefined });
     process.stdout.write('{}\n');
     return;
   }
@@ -374,6 +377,7 @@ export function cmdLog(event, adapter, input) {
       status: i.status || 'completed',
       durationMs: i.durationMs,
       ended_at: endedAt,
+      subagent_id: i.subagentId || undefined,
     });
     process.stdout.write('{}\n');
     return;

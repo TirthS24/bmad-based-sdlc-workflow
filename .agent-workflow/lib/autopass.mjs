@@ -135,22 +135,23 @@ function setCurrent(state, stage, action) {
 // whose rules hold. Returns the lines to print. A declined gate stays current, with the reason.
 export function advanceAfter(fromId, state, workflow, config) {
   const notes = [];
+  const events = [];
   let next = nextStage(fromId, state, workflow);
   if (stageById(workflow, next)?.executor === 'human' && profileOf(state, workflow).auto?.[next]) {
     const d = evaluateAuto(next, state, workflow, config);
     if (d.passed) {
       recordAuto(state, next, d);
-      appendEvent('approve', { gate: next, by: 'auto', condition: d.condition });
+      events.push({ type: 'approve', data: { gate: next, by: 'auto', condition: d.condition } });
       notes.push(`✓ ${next} auto-passed: ${d.reason}`);
       next = nextStage(next, state, workflow);
     } else {
       state.gates[next].auto_declined = { condition: d.condition, reason: d.reason, at: new Date().toISOString() };
-      appendEvent('gate_auto_declined', { gate: next, condition: d.condition });
+      events.push({ type: 'gate_auto_declined', data: { gate: next, condition: d.condition } });
       notes.push(`Auto-pass not applied to ${next}: ${d.reason}`);
       setCurrent(state, next, `${fillAction(next, state.run.id)} Auto-pass not applied: ${d.reason}`);
-      return notes;
+      return { notes, events };
     }
   }
   setCurrent(state, next, fillAction(next, state.run.id));
-  return notes;
+  return { notes, events };
 }
