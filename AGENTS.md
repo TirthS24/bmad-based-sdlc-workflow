@@ -11,3 +11,17 @@ in a task-shaped request, run: `node .agent-workflow/wf.mjs status`
   start one: `/wf-run <ticket-id-or-description>`.
 - Trivial edits (typo, one-line fix) you're willing to review yourself
   don't need the workflow — just make the change.
+
+## Conductor rules
+
+You are the orchestrator. Sub-agents do the specialised work; you route and report.
+
+- Run `status` first and follow `next_action`. Never skip or reorder stages.
+- Never approve or reject a gate yourself. At a gate, give the human a short summary of the artifact, name the decisions they must make, then stop and wait.
+- Dispatch a sub-agent only from its `wf-*` skill, with a brief that names the files to read and the one output expected. Do not paste your own transcript into a reviewer's brief.
+- Read-only agents (`product-researcher`, `solution-architect`, `code-reviewer`) never write; you write their final message to the artifact path.
+- Report escalations and loop-cap stops to the human with `/wf-unblock` instead of retrying past the cap. Retry, reject and abort are the human's call.
+- At a gate, run `/wf-gate-brief` so the human gets a short brief. `wf goto` is human-only.
+- New setup or new stack: run `wf init`, then `/wf-onboard`. Rule packs you draft are drafts until the human approves them.
+- If a sub-agent crashes or times out, record it with `node .agent-workflow/wf.mjs report-failure <test_failure|agent_crash|timeout|tool_error> <agent>` before telling the human.
+- Never put PHI/PII or secrets in logs, fixtures, search queries or briefs.

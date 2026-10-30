@@ -1,6 +1,6 @@
 # Implementation plan: harness-agnostic, gated AI SDLC with usage telemetry
 
-Status: Phases 0 and 1 implemented; Phase 1B (stage capabilities) and Phases 2–8 pending.
+Status: Phases 0–8 implemented, including the **planning stage redesign** (`plans/planning-stage-redesign.md`): ingest → grill/synthesize → `SRS.md` → persona tickets with AC test cases; `test_plan` / `gate_plan` removed. Phase 8's real baseline still needs your sample app and five specs (see `docs/BASELINE.md`); the scripted baseline runs in CI. Deviations from this plan are listed in section 9. How to install and run on another repo: section 10.
 Scope decisions below come from the planning discussion; items marked **[proposed]** are my recommendations and still need your confirmation.
 
 ## 1. Goal
@@ -11,16 +11,19 @@ Set up and monitor a software development lifecycle in which a main (orchestrato
 
 | # | Stage | Executor | Human gate on exit |
 |---|---|---|---|
-| 1 | Requirement interview → `SPEC.md` (product decisions) | main agent | yes |
-| 2 | Architecture and engineering review, key technical decisions → `approach.md` | subagent | yes |
-| 3 | Product/flow test cases as Playwright scripts, then frozen | subagent | yes |
-| 4 | Implementation, with unit tests written by the implementer | subagent | **no** |
-| 5 | Code review, then another test round | subagent or main | yes |
-| 6 | Automated E2E run of the stage 3 scripts | subagent | yes |
+| 1 | **Planning** — ingest, grill/synthesize, `SRS.md`, persona tickets, AC `test_cases` | main agent + read-only sub-agents | yes (`gate_spec`) |
+| 2 | Architecture and engineering review → `approach.md` | `solution-architect` | yes (`gate_approach`) |
+| 3 | ATDD: Playwright product tests from ticket scenarios, then frozen | `test-architect` | yes (`gate_tests`) |
+| 4 | Implementation, with unit tests written by the implementer | `implementer` | **no** |
+| 5 | Independent code review | `code-reviewer` | yes (`gate_review`) |
+| 6 | Verify tiers + evidence bundle | `verifier` | yes (`gate_final`) |
 | 7 | GitHub PR | main agent | yes (final approval before `gh pr create`) |
 
+Workflow stage ids: `planning` → `gate_spec` → `feasibility` → `gate_approach` → `tests` → `gate_tests` → `implement` → `review` → `gate_review` → `verify` → `gate_final` → `pr`. State schema **3**; paused schema-2 runs map `grill_spec` → `planning` and drop `test_plan` / `gate_plan`.
+
 Rules that follow from the decisions:
-- Implementation only starts after the product decisions (stage 1) and technical decisions (stage 2) are approved.
+- Implementation only starts after **SRS + tickets** (stage 1) and the approved approach (stage 2) are in place, and product tests are frozen at `gate_tests`.
+- Product scenarios live on ticket acceptance criteria (`PRD-n.m` / `TECH-*`); Playwright code is written in `tests`, not in a separate `test-plan.md` stage.
 - Product/flow tests are written before implementation and the implementer cannot edit them. Unit tests are not frozen and belong to the implementer.
 - Gerrit is dropped. The delivery target is a GitHub PR only.
 - The retry loop inside implementation (and the fix rounds in review) are not gated. A cap or a stuck loop ends them and escalates to a human.
@@ -35,29 +38,26 @@ Rules that follow from the decisions:
 | Roles | Admin (dashboard access) and workflow user (can log in and send events, no dashboard). Only admins see data. |
 | Privacy | PII/PHI scrubbed at capture, before anything is queued or sent. Each session has a risk indicator. |
 | Offline | Events queue locally, sync later, and are deleted from the device after the server acknowledges them. |
-| Dashboard | Admin-only: time per stage, errors, gates held back by users, agent failures, retries and their counts. |
+| Dashboard | Admin-only: time per stage, errors, gates held back by users, agent failures, retries, **human escalation counts** (planning grill), **sub-agent timings** (`agent_run`; `no_stop` when hooks miss a stop). |
 | Ingestion service | Part of the server that serves the dashboard. |
 
 ## 2. Current state (baseline)
 
-Estimates are my judgement, not measured.
+This section described gaps at the start of the project. **As built today** (including the planning redesign):
 
-| Area | Today | Gap to goal |
-|---|---|---|
-| Stage machine | `wf.mjs` (~900 lines), `workflow.json`, 10 stages, `loop_caps`, plateau detection | New stage graph and gates |
-| Gates | Gate 1 (approach and test plan) and Gate 2 (final) | Gate on 6 exits; rejection is not recorded |
-| Spec interview | `bmad-spec` via `/wf-start` | Add own gate |
-| Architecture review | `feasibility-analyst` (verdict, 2–3 approaches) | Reframe as architecture and engineering review |
-| Tests | `test-architect` writes one frozen set (unit and E2E globs) before implementation | Split product/E2E (frozen, Playwright) from unit (implementer-owned) |
-| Implementation | `implementer` subagent, cap 5 | Mostly aligned |
-| Review | `bmad-code-review` on the main thread, cap 3 | Gate on exit |
-| E2E | `verifier` explores in Cursor's built-in browser; `config.json` `e2e` is empty | Playwright runner |
-| PR | Gerrit commit and push | `gh pr create` |
-| Enforcement | `.cursor/hooks.json` + `guard.mjs` (13 lines) | Port to a harness-neutral core, add adapters |
-| Events | Local `events.jsonl` | Schema, scrubbing, queue, sync |
-| Identity, database, dashboard, installer | none | New |
+| Area | Shipped |
+|---|---|
+| Stage machine | `workflow.json` schema 3; `planning` through `pr`; six human gates; `loop_caps` (including `grill` for planning rounds) |
+| Planning | `/wf-start` orchestrates ingestor, griller, synthesizer, srs-writer, ticket-writer, acceptance-test-writer; artifacts `SRS.md`, `grill/questions.json`, `tickets/**/*.json`; `wf tickets check`; optional `/wf-jira-tickets` after `gate_spec` |
+| Spec artifact | **`SRS.md`** (IEEE-style sections), not a single `bmad-spec`/`SPEC.md` interview |
+| Architecture | `solution-architect` → `approach.md` with ADR sections |
+| Tests | `test-architect` ATDD from ticket `test_cases`; no `test_plan` / `gate_plan` |
+| Implementation / review / verify / PR | As in section 1; independent `code-reviewer`; Playwright-oriented verify |
+| Enforcement | Core + Cursor / Claude / generic adapters; hooks include `subagentStart` / `subagentStop` telemetry |
+| Telemetry | Local queue + sync; server views `agent_timings`, `run_human_escalations` |
+| Installer | `installer/install.mjs` copies skills/agents from `capabilities.json` |
 
-Overall alignment is about 60% on pipeline shape and about 25% once telemetry, auth and the installer are counted.
+Remaining gaps vs the original ambition: real baseline on five live specs (Phase 8), Hermes adapter, optional MCP exploratory verify, password reset.
 
 ## 3. Architecture
 
@@ -86,7 +86,7 @@ Components:
 
 Every event: `event_id` (uuid, idempotency key), `run_id`, `session_id`, `user_id` (assigned server-side from the token), `stage`, `type`, `ts`, `attrs` (small, scrubbed JSON).
 
-Types: `run_started`, `stage_started`, `stage_completed`, `gate_requested`, `gate_approved`, `gate_rejected`, `loop_round` (with round number and cap), `agent_failed`, `guard_blocked`, `error` (with `error_class`: test_failure, agent_crash, timeout, guard_block, tool_error), `scrub_hit` (category and count only), `session_unchecked` (harness gave no content hooks).
+Types: `run_started`, `stage_started`, `stage_completed`, `gate_requested`, `gate_approved`, `gate_rejected`, `loop_round` (with round number and cap), `agent_failed`, `guard_blocked`, `error` (with `error_class`: test_failure, agent_crash, timeout, guard_block, tool_error), `scrub_hit` (category and count only), `session_unchecked` (harness gave no content hooks), `run_ended`, **`human_escalations`** (planning: count only, no question text), **`agent_run`** (sub-agent `started_at` / `ended_at` / `duration_ms` / `status`, including `no_stop` when a hook stop is missing). Local hook types `subagent_start` / `subagent_stop` pair into `agent_run`; never persist `task`, `summary`, or transcript paths from hook payloads.
 
 ### Database sketch
 
@@ -114,13 +114,12 @@ The pipeline only works if each stage has the right capabilities behind it. This
 
 | Kind | What exists | Notes |
 |---|---|---|
-| Stage skills | `wf-run`, `wf-start`, `wf-feasibility`, `wf-test-plan`, `wf-tests`, `wf-implement`, `wf-review`, `wf-verify`, `wf-pr`, `wf-approve`, `wf-reject`, `wf-pause`, `wf-resume`, `wf-abort` | Slash-only. One per stage plus human controls. |
-| BMAD skills | `bmad-spec`, `bmad-advanced-elicitation`, `bmad-deep-recon`, `bmad-project-context`, `bmad-review`, `bmad-code-review`, `bmad-walkthrough` | Only some are wired into a stage. `bmad-deep-recon` (research packs), `bmad-project-context`, `bmad-review` lenses and `bmad-walkthrough` are not used by any stage yet. |
-| Other skills | `frontend-design`, `unit-testing-test-generate`, `product-quality-assurance`, `prompt-engineering-xml` | Slash-only, not tied to a stage. |
-| Sub-agents | `feasibility-analyst`, `test-architect`, `implementer`, `verifier` | All Cursor format (`.cursor/agents/`). |
-| Rules | `backend-rules-md.mdc` (Django, DRF, GraphQL, Postgres), `frontend-rules-md.mdc` (TypeScript, React) | Written for one project's stack. |
-| Rulesets in `standards.md` | Edge-case checklist, technical scenario checklist, feasibility rubric, review rubric, coding rules | Loaded by heading. |
-| Main-agent instructions | `AGENTS.md` | Short pointer: check status, follow `next_action`. |
+| Stage skills | `wf-run`, `wf-start`, `wf-research`, `wf-spec-review`, `wf-feasibility`, `wf-tests`, `wf-implement`, `wf-review`, `wf-verify`, `wf-pr`, `wf-approve`, `wf-reject`, `wf-pause`, `wf-resume`, `wf-abort`, `wf-unblock`, `wf-goto`, `wf-gate-brief`, `wf-jira-tickets`, `persona-ui-ux`, `persona-fe`, `persona-be`, `persona-qa`, `wf-playwright-e2e` | Slash-only. Planning orchestration is `/wf-start`. |
+| BMAD skills | `bmad-spec`, `bmad-advanced-elicitation`, `bmad-deep-recon`, `bmad-project-context`, `bmad-review`, `bmad-code-review`, `bmad-walkthrough` | Not used as the primary SRS writer; optional lenses during spec review or research. |
+| Other skills | `frontend-design`, `unit-testing-test-generate`, `product-quality-assurance` | `product-quality-assurance` on `tests` stage; others slash-only or implement. |
+| Sub-agents | **Planning:** `requirements-ingestor`, `requirements-griller`, `requirements-synthesizer`, `srs-writer`, `ticket-writer`, `acceptance-test-writer`, `product-researcher`. **Later stages:** `solution-architect`, `test-architect`, `implementer`, `code-reviewer`, `verifier` | All Cursor format (`.cursor/agents/`). Planning agents are read-only. |
+| Rules | Stack packs under `.agent-workflow/rules/` plus `standards.md` | Includes Ingestion, Grilling, Synthesis, SRS format, Ticket format, Persona tickets. |
+| Main-agent instructions | `AGENTS.md` | Conductor: status first, never self-approve gates. |
 
 ### 4.2 Design rules
 
@@ -128,7 +127,7 @@ The pipeline only works if each stage has the right capabilities behind it. This
 2. **Deterministic first.** Every artifact a stage produces gets a structural check in `wf.mjs` (`done` refuses otherwise). A prompt is never the only control.
 3. **Single source for lists.** Checklists live once in `standards.md` and are loaded by heading. Skills point to them and never copy them.
 4. **Thin skills, on-demand references.** A `SKILL.md` stays under about 150 lines. Detail goes in `references/` files read only when needed. This is what keeps token use down.
-5. **Judges get fresh context.** The code reviewer and verifier never see the implementer's transcript. They get the spec, approach, diff and standards.
+5. **Judges get fresh context.** The code reviewer, verifier, and acceptance-test-writer never see the implementer's transcript. They get SRS, tickets, approach, diff and standards as appropriate.
 6. **Read-only by construction.** Researcher, architect and reviewer agents have no write tool except the one output file. The validator (Phase 1B) checks this.
 7. **Sources or it didn't happen.** Research output separates sourced fact (URL and date), inference, and unknown. A claim with no source fails the check.
 8. **Optional until triggered.** Research and specialist lenses (security, data, UI, LLM prompts) run only when the interview or the architect flags a trigger. This controls cost and gate fatigue.
@@ -146,115 +145,78 @@ The pipeline only works if each stage has the right capabilities behind it. This
   - Rules: a `rules/` pack per stack. Three ship first: Python (Django, DRF, Postgres), TypeScript with React, and a generic fallback. For a stack with no shipped pack, `wf init` has an agent draft one from the detected files and the framework's own documentation. The draft is saved in the project for a human to review and approve before the implementer uses it, so an unreviewed pack is never trusted. `wf init --refresh` re-detects when a manifest file changes.
   - Main-agent file: grows from a pointer into the conductor rules (section 4.4).
 
-#### Stage 1: Specification (`grill_spec`, `gate_spec`)
-- **Today:** `wf-start` runs `bmad-spec` interactively and `done grill_spec` checks REQ ids and success lines.
-- **Gaps:**
-  - No research. Specs for a new product surface need market, competitor, user-voice and domain input, but the interview never asks for it.
-  - No pass that attacks the spec for ambiguity, missing edge cases or untestable success lines before the human sees it.
-  - No non-goals, personas or priority check in the structural test.
-- **Add:**
-  - Agent `product-researcher`: read-only, uses `bmad-deep-recon` packs (market, competitive, domain, user-voice, technical, academic). Returns `research.md` with sourced facts, inferences and unknowns. Triggered by the interview when the requirement is new, competitor-driven or in an unfamiliar domain, never by default.
-  - Skill `wf-research`: the human or the interview invokes it. Chooses the pack, sets the freshness window, dispatches the agent and links the result into `SPEC.md`.
-  - Skill `wf-spec-review`: a lens pass using `bmad-review` (adversarial, edge-case hunter, structure, prose) on `SPEC.md`. Runs before `gate_spec`. It reuses existing lenses; no new agent.
-  - Skill reuse: `bmad-spec`, `bmad-advanced-elicitation` (for hard requirements).
-  - Rules in `standards.md`: a research rubric (sources, freshness, how to mark inference) and spec quality rules (non-goals present, every REQ testable, personas where users are involved).
-  - Check: `SPEC.md` has a non-goals section; if `research.md` exists, every claim has a source.
+#### Stage 1: Planning (`planning`, `gate_spec`)
+
+- **Shipped flow** (see `plans/planning-stage-redesign.md` and skill `wf-start`):
+  1. `requirements-ingestor` → `draft-requirements.md` (MCP + repo sources).
+  2. Grill loop (cap `loop_caps.grill`, default 5): `requirements-griller` → `requirements-synthesizer` (Confluence + repo only); `UNANSWERABLE` → human one question at a time → `grill/questions.json`.
+  3. `srs-writer` → `SRS.md` (sections 1–7, `REQ-n`, Non-goals).
+  4. `ticket-writer` (+ persona-* skills) → `tickets/<persona>/*.json`.
+  5. `acceptance-test-writer` (fresh context) → fills `test_cases` on each AC (`PRD-n.m`, Given/When/Then).
+  6. `node .agent-workflow/wf.mjs tickets check` then `/wf-spec-review` then `done planning`.
+- **Optional:** `/wf-research` → `research.md`; `/wf-jira-tickets` after `gate_spec` if Atlassian MCP connected and human opts in.
+- **Checks:** `SRS.md` structure and REQ success lines; all grill questions answered with allowed sources for synthesis; tickets cover every REQ and every AC has test cases; `tickets_hash` at approve (replaces old `test_plan_hash`).
+- **Telemetry:** `human_escalations` count on `done planning`; sub-agent `agent_run` rows from hooks (or `wf agent start|end` on generic harness).
 
 #### Stage 2: Architecture and technical decisions (`feasibility`, `gate_approach`)
-- **Today:** `feasibility-analyst` returns a verdict and two or three approaches with blast radius.
-- **Gaps:** this is a codebase check, not a solution architect's output. It does not record decisions with their trade-offs, does not cover non-functional needs (security, privacy, performance, migrations, observability, cost, rollout and rollback), does not research build-versus-buy or library choice, and its decisions do not outlive the run.
-- **Add:**
-  - Agent `solution-architect`: replaces `feasibility-analyst` (the stage id `feasibility` stays, so state and tests are unaffected). Read-only. Reads `SPEC.md`, `research.md` and `project-context.md`. Produces `approach.md`: verdict, 2–3 options, a decision record for the recommended option (context, options, decision, consequences), non-functional section, risks and mitigations, rollout and rollback, and the single-commit-fit line.
-  - Skill `wf-feasibility` stays as the entry point, renamed in text to "architecture review".
-  - Conditional lenses, loaded as `standards.md` sections rather than agents: security and privacy (auth, PHI/PII, secrets, logging), data and migrations (expand/contract, rollback), integration and failure modes, and cost. The architect applies the ones its triggers match and says which it skipped and why.
-  - Technical research: the architect may dispatch `product-researcher` with the technical pack for library or service choices.
-  - Persistence (approved): at PR time a short decision record of two lines at most (the decision and the reason, AI-written if needed) is added to `docs/adr/NNNN-title.md` in the PR, so the reasoning outlives `runs/`. The full `approach.md` stays local.
-  - Check: `approach.md` has a verdict, at least two options, a decision record, a non-functional section, a risks section and a rollback line.
+- **Shipped:** `solution-architect` (read-only) via `/wf-feasibility`. Reads **`SRS.md`**, `research.md`, project context. Produces `approach.md` with verdict, options, decision record, non-functional notes, risks, rollback.
+- **Checks:** as in `standards.md` Feasibility rubric and Architecture decision record.
 
-#### Stage 3a: Test plan (`test_plan`, `gate_plan`)
-- **Today:** `test-architect` in plan mode writes a two-tier `test-plan.md`; the check requires every REQ covered and each scenario tagged by layer and automated/manual.
-- **Gaps:** nothing separates product/flow scenarios (Playwright, frozen) from technical ones (unit, implementer-owned). Test data, environment and flake risk are not planned. UI states and accessibility depend on the writer remembering.
-- **Add (built in Phase 2):**
-  - `test-architect` is narrowed to the plan and the Playwright product tests. Unit tests move to the implementer.
-  - Rules: Playwright conventions (role-based locators, no fixed sleeps, one flow per test, tags `@REQ-n`/`@PRD-n.m`, fixtures for auth and data), and a test-data rule (synthetic data only).
-  - Skill reuse: `product-quality-assurance`.
-  - Check: every product scenario names a Playwright file; every REQ maps to at least one product scenario.
+#### Stage 3: Product tests (`tests`, `gate_tests`)
 
-#### Stage 3b: Product tests (`tests`, `gate_tests`)
-- **Today:** `test-architect` in ATDD mode; `done tests` requires failures that cite scenario ids.
-- **Add (built in Phase 2):** skill `wf-playwright-e2e` with the authoring conventions and the commands to run one test; the red-for-the-right-reason check also rejects tests that fail because the app is not running.
+- **Shipped:** Scenarios come from ticket `test_cases` (written in planning). `test-architect` runs in **ATDD** mode only via `/wf-tests`; writes Playwright under `product_test_globs`. `done tests` requires red-for-the-right-reason failures citing `REQ` / `PRD` / `TECH` ids; freeze hash at `gate_tests`.
+- **Rules:** Playwright conventions, Technical scenario checklist on ticket ACs; `product-quality-assurance` on the tests stage.
+- **Removed:** `test_plan`, `gate_plan`, `wf-test-plan`, and `test-plan.md` as a pipeline artifact.
 
 #### Stage 4: Implementation (`implement`)
-- **Today:** `implementer` with the stack's rule file; the stop hook retries up to the cap.
-- **Gaps:**
-  - It uses whichever rule file matches its Python/TypeScript guess; other stacks have none.
-  - Unit tests are frozen with the product tests today (Phase 2 changes this).
-  - No rules for adding dependencies, writing migrations or handling secrets.
-  - When the cap is hit nothing tells the human how to continue (section 4.4).
-- **Add:**
-  - Stack rule packs chosen by `wf-onboard`, plus a generic fallback.
-  - Rules: dependency policy (ask before adding), migration policy (expand/contract, reversible), secrets and logging policy (never log PHI/PII, which exists as a line today).
-  - Skill reuse: `unit-testing-test-generate` (for the unit tests it now owns), `frontend-design` (when a UI surface is in `config.json`).
-  - Agent: `implementer` stays; its brief changes to "own unit tests, do not touch product tests".
+
+- **Shipped:** `implementer` reads **SRS + tickets** and approved approach; owns unit tests; cannot edit frozen product tests. Stop hook retries up to `loop_caps.implement`; stuck loop → `/wf-unblock`.
+- **Rules:** stack packs from `wf-onboard`, dependency and migration policy, Coding rules.
 
 #### Stage 5: Review (`review`, `gate_review`)
-- **Today:** `/wf-review` runs `bmad-code-review` on the main thread, the same agent that coordinated the implementation.
-- **Gaps:** the reviewer is not independent. The review lens set is fixed. `review.md` has no required structure beyond tagged findings. The human gets a wall of findings with no walkthrough.
-- **Add:**
-  - Agent `code-reviewer`: fresh context, read-only plus one output file. Inputs are the spec, the approved approach, the diff against the baseline and `standards.md`. It runs the four-axis rubric and writes `review.md`.
-  - Conditional lens passes through `bmad-code-review` layers and `bmad-review` lenses: security and privacy, test quality, edge cases.
-  - Skill reuse: `bmad-walkthrough` offered at `gate_review` so the human can be walked through the change.
-  - Fixes stay with `implementer` (a `gate_review` rejection or a high finding returns to `implement`), so the reviewer never edits code.
-  - Check: `review.md` has one section per axis and every finding carries a severity tag.
+
+- **Shipped:** Independent `code-reviewer`; inputs SRS, approach, diff; four-axis `review.md`. Reject `gate_review` → `implement`. Optional `bmad-walkthrough` at the gate.
 
 #### Stage 6: Verification and E2E (`verify`, `gate_final`)
-- **Today:** `verifier` explores in Cursor's built-in browser and `done verify` runs the configured commands.
-- **Gaps:** no Playwright run, no app start/stop or health check, no seeded data, no traces. The evidence bundle has no required shape. Flaky tests have no policy.
-- **Add (built in Phase 2):**
-  - `verifier` is reframed as a runner and reporter: starts the app, seeds data, runs the frozen Playwright suite, retries a failure once and marks it flaky if it then passes, collects the HTML report, traces, screenshots and an accessibility scan, and maps failures back to REQ ids.
-  - Config: `commands.start`, a health URL and seed command in `config.json`.
-  - Skill reuse: `wf-playwright-e2e`.
-  - Exploratory browser or MCP testing stays optional and harness-specific (open item).
-  - Check: evidence bundle contains the report and one result per product scenario.
+
+- **Shipped:** `verifier` runs configured tiers; every automated `PRD-n.m` from tickets must have a passing test; evidence under `runs/<id>/evidence/`. Playwright via `commands.e2e` / `webServer` in project config.
 
 #### Stage 7: Pull request (`pr`)
-- **Today:** `wf-pr` commits, writes the change summary, and `wf pr` pushes and opens the PR.
-- **Gaps:** the summary is free text with no format guidance beyond the skill; there is no check that it matches the diff; decision records are not persisted.
-- **Add:**
-  - Rules: a PR summary guide in `standards.md` (what and why by area, no file lists, no code).
-  - The two-line decision record (see Stage 2) and a docs/changelog prompt when behaviour visible to users changed.
-  - No new agent; the main agent writes the summary.
+
+- **Shipped:** `/wf-pr` after `gate_final`; `wf adr` for decision record; PR body from `pr-summary.md` + structured sections; `gh pr create`.
 
 ### 4.4 Cross-cutting capabilities
 
 | Capability | Why it is needed | Proposal |
 |---|---|---|
 | Conductor rules | The main agent must know how to orchestrate: status first, follow `next_action`, never self-approve a gate, stop and wait at gates, dispatch the right sub-agent with a clear brief, report escalations. Today `AGENTS.md` is a pointer. | Expand the main-agent file into the conductor ruleset. Phase 7 emits it as `AGENTS.md`, `CLAUDE.md` or the harness equivalent. |
-| Gate brief | Six gates risk gate fatigue and rubber-stamping. Humans need a digest, not the whole artifact. | `wf brief <gate>` (command): gathers facts deterministically (artifact paths, size, hash, change since the last version, open-question count, earlier rejections and reasons). Skill `wf-gate-brief`: the agent turns that into a short plain-language brief with decisions to make. |
-| Escalation handling | When a loop cap or stuck-loop stop fires, `status --check` fails and the run stalls. No command lets the human choose retry, reject or abort. This is a real gap today. | `wf escalation list/retry/reject/abort` (command) and skill `wf-unblock`. Retry resets the loop with a note; reject returns to an earlier gate's stage; abort ends the run. All recorded as events. |
-| Capability manifest and validator | The pieces must stay consistent as they multiply. | `.agent-workflow/capabilities.json` maps each stage to its skill, agent, rule sections and checks. `wf doctor` (command) validates it (see Phase 1B). |
-| Sub-agent contract | Agents differ in tools, model and output format, which breaks portability. | A short spec per agent: inputs, the one output file, allowed tools, read-only flag, suggested model tier, and the return format. |
-| Jump to a stage | Users sometimes need to start mid-pipeline (existing spec, resumed work). Not possible today. | `wf goto <stage>` (approved): human only, backwards always allowed, forwards only if every earlier artifact passes its check and no gate is skipped without its approval, recorded as an event. |
+| Gate brief | Six gates risk gate fatigue and rubber-stamping. Humans need a digest, not the whole artifact. | **Shipped:** `wf brief` + `wf-gate-brief`. At `gate_spec`, facts include SRS REQ count, tickets per persona, test case count, synthesis vs human grill answers, escalation count. |
+| Escalation handling | When a loop cap or stuck-loop stop fires, the run stalls. | **Shipped:** `wf escalation list/retry/reject/abort` and `wf-unblock`. Planning grill cap uses the same pattern. |
+| Capability manifest and validator | The pieces must stay consistent as they multiply. | **Shipped:** `capabilities.json` + `wf doctor`. |
+| Sub-agent contract | Agents differ in tools, model and output format. | **Shipped:** `.cursor/agents/*.md` + `docs/adapter-contract.md` (hooks, no PHI in telemetry). |
+| Jump to a stage | Users sometimes need to start mid-pipeline. | **Shipped:** `wf goto <stage>` (human-only). Forwards require SRS/tickets + approach checks, not `test-plan.md`. |
 | Lessons learned | Repeated review findings should become rules instead of repeating. | Optional `wf-retro` skill after a run, writing proposed rule changes for human approval. Not in Phase 1B. |
 
 Suggested model tier per agent (proposed, harness permitting): strongest for `solution-architect` and `code-reviewer` (judgement), strong for `implementer` and `test-architect`, fast for `product-researcher` summaries, `verifier` and gate briefs.
 
-### 4.5 Suggested skills by stage
+### 4.5 Skills and agents by stage (as shipped)
 
-| Stage | Reuse what exists | Add |
+| Stage | Skills | Agents |
 |---|---|---|
-| 0 Intake | `wf-run`, `bmad-project-context` | `wf-onboard` |
-| 1 Spec | `wf-start`, `bmad-spec`, `bmad-advanced-elicitation`, `bmad-deep-recon` | `wf-research`, `wf-spec-review`, agent `product-researcher` |
-| Gate: spec | `wf-approve`, `wf-reject` | `wf-gate-brief` |
-| 2 Architecture | `wf-feasibility`, `bmad-deep-recon` (technical pack) | agent `solution-architect`; security, data and cost lenses as `standards.md` sections |
-| Gate: approach | `wf-approve`, `wf-reject` | `wf-gate-brief` |
-| 3a Test plan | `wf-test-plan`, `product-quality-assurance` | Playwright conventions and test-data rule |
-| 3b Product tests | `wf-tests` | `wf-playwright-e2e` |
-| 4 Implement | `wf-implement`, `unit-testing-test-generate`, `frontend-design`, stack rule packs | dependency, migration and secrets rules; `wf-unblock` |
-| 5 Review | `wf-review`, `bmad-code-review`, `bmad-review`, `bmad-walkthrough` | agent `code-reviewer` |
-| 6 Verify | `wf-verify` | `verifier` as Playwright runner; `wf-playwright-e2e` |
-| 7 PR | `wf-pr` | PR summary guide; ADR copy |
-| Anywhere | `wf-pause`, `wf-resume`, `wf-abort` | `wf-unblock`; `wf goto` if approved |
+| Intake | `wf-run`, `wf-onboard` | — |
+| Planning | `wf-start`, `wf-research`, `wf-spec-review`, `persona-ui-ux`, `persona-fe`, `persona-be`, `persona-qa` | ingestor, griller, synthesizer, srs-writer, ticket-writer, acceptance-test-writer, product-researcher |
+| `gate_spec` | `wf-approve`, `wf-reject`, `wf-gate-brief`, `wf-jira-tickets` | — |
+| Feasibility | `wf-feasibility` | solution-architect |
+| `gate_approach` | approve / reject / gate-brief | — |
+| Tests | `wf-tests`, `wf-playwright-e2e`, `product-quality-assurance` | test-architect |
+| `gate_tests` | approve / reject / gate-brief | — |
+| Implement | `wf-implement`, `unit-testing-test-generate`, `frontend-design` | implementer |
+| Review | `wf-review` | code-reviewer |
+| `gate_review` | approve / reject / gate-brief | — |
+| Verify | `wf-verify`, `wf-playwright-e2e` | verifier |
+| `gate_final` | approve / reject / gate-brief | — |
+| PR | `wf-pr` | — |
+| Anywhere | `wf-pause`, `wf-resume`, `wf-abort`, `wf-unblock`, `wf-goto` | — |
 
 ### 4.6 What I would not build
 - A separate agent for each lens. Lenses are `standards.md` sections applied by the architect or reviewer.
@@ -292,8 +254,8 @@ Inserted between Phase 1 and Phase 2 so the stage executors exist before the tes
 Scope split, stated plainly: Phase 1B builds everything that does not depend on the Playwright test model (stages 0, 1, 2, 4, 5, 7 and the cross-cutting pieces). For stages 3 and 6 it writes only the contracts (agent specs and the manifest entries); Phase 2 fills them in.
 
 - **Manifest and validator:** `.agent-workflow/capabilities.json` mapping each stage to its skill, agent, rule sections and artifact check. `wf doctor` validates it.
-- **Core commands:** `wf brief <gate>`, `wf escalation list|retry|reject|abort`, `wf doctor`, `wf goto <stage>` (approved), and `wf init [--refresh]` with dynamic stack detection.
-- **New checks (in `lib/postconditions.mjs`):** spec has non-goals; research has sources when present; `approach.md` has a decision record, a non-functional section, risks and rollback; `review.md` has one section per axis with severity tags.
+- **Core commands:** `wf adr`, `wf brief <gate>`, `wf escalation list|retry|reject|abort`, `wf doctor`, `wf goto <stage>` (approved), and `wf init [--refresh]` with dynamic stack detection.
+- **New checks (in `lib/postconditions.mjs`):** planning checks `SRS.md`, `grill/questions.json`, persona tickets (`lib/tickets.mjs`); spec quality / non-goals; research sources when present; `approach.md` decision record; `review.md` axes.
 - **New skills:** `wf-onboard` (run by `wf init`), `wf-research`, `wf-spec-review`, `wf-gate-brief`, `wf-unblock`.
 - **New or changed agents:** `product-researcher` (new), `solution-architect` (replaces `feasibility-analyst`), `code-reviewer` (new, independent), `implementer` (brief changed: owns unit tests), and contract-only specs for the Phase 2 `test-architect` and `verifier` changes.
 - **Rulesets:** new `standards.md` sections (research rubric, spec quality, architecture decision record format, security and privacy lens, data and migration lens, dependency policy, review finding format, PR summary guide, gate brief format); stack rule packs under `rules/` (Python, TypeScript/React, generic fallback shipped; others drafted at init and human-approved); the conductor ruleset in the main-agent file.
@@ -311,7 +273,7 @@ Scope split, stated plainly: Phase 1B builds everything that does not depend on 
 
 ### Phase 2: Test model and E2E stage
 - Split tests into product/flow (Playwright, `E2E/tests/**`) and unit (implementer-owned).
-- The test stage (stage 3) writes Playwright scripts from `SPEC.md` and `approach.md`; they are frozen at its gate.
+- The test stage writes Playwright scripts from **`SRS.md`, ticket `test_cases`, and `approach.md`**; they are frozen at `gate_tests`.
 - Stage 6 runs the scripts with the Playwright CLI and records pass/fail per script as the stage result.
 - Fill `config.json` commands for E2E, type check and formatter.
 
@@ -392,3 +354,78 @@ Scope split, stated plainly: Phase 1B builds everything that does not depend on 
 - Phase 1B decisions made: the proposed agents and skills are approved (refine during final testing); `wf goto` is in; decision records are copied into the PR as a summary of two lines at most, which AI may write; the research agent may use web search, read READMEs and docs, and explore the codebase or use cached summaries; rule packs ship for Python, TypeScript/React and a generic fallback, and other stacks are detected and drafted at init for human approval.
 - Still open: suggested model tiers per agent (harness permitting); where the drafted-pack approval is recorded; which web search tool each harness provides to the research agent.
 - Password reset flow (admin-triggered reissue of an invite is the minimal option).
+
+## 9. Deviations made while building Phases 3–8
+
+- **Password hashing:** scrypt (built into Node) instead of argon2id or bcrypt, to avoid a native module. Memory-hard and salted; cost parameters are in `server/src/crypto.mjs`.
+- **Postgres in tests:** a throwaway local cluster (`initdb` and `pg_ctl`) instead of a container, to keep the suite runnable without Docker. CI can use either by setting `PG_BIN` or pointing at a service container.
+- **Server language:** plain JavaScript (ESM) rather than TypeScript, to match the CLI and avoid a build step. The only runtime dependency is `pg`.
+- **Rate limiter:** in memory, so one server process. Noted in `docs/RUNBOOK.md`.
+- **Dashboard tests:** Playwright 1.49's ESM loader hangs on Node 24, so the UI tests and their global setup are CommonJS and start the stack in a child process.
+- **Risk indicator:** computed server-side as a view over events (`session_unchecked` beats `scrub_hit` beats none). The scrubber also scans commands and paths that hooks see, keeping only category and count.
+- **Hermes:** no dedicated adapter. It is served by the `generic` adapter (git hooks and CI) until its capabilities are checked.
+- **Real baseline:** not recorded on a live app. Scripted five-run baseline with stub planning artifacts validates telemetry in CI.
+- **Planning redesign (2026):** `grill_spec` → `planning`; removed `test_plan` / `gate_plan`; persona tickets + `wf tickets check`; telemetry `human_escalations` and `agent_run`; see `plans/planning-stage-redesign.md`.
+- **Event types:** `run_ended` added so the server can distinguish completed, aborted and paused runs.
+
+## 10. Running the workflow on another repository
+
+Use this when the **workflow package** lives in `bmad-based-sdlc-workflow` (or a fork) and the **code you build** lives elsewhere (your product repo).
+
+### Prerequisites on the target project
+
+- Git repo with `origin` on GitHub (for the `pr` stage).
+- Node 20.12+, `gh` authenticated, Cursor (or Claude Code / generic harness).
+- A realistic dev command the workflow can detect (`package.json` scripts, `pyproject.toml`, etc.).
+
+### Install (once per project)
+
+From the machine that has both trees checked out:
+
+```bash
+WF=/path/to/bmad-based-sdlc-workflow
+APP=/path/to/your-app
+
+node $WF/installer/install.mjs --target $APP --harness cursor
+# optional telemetry:
+# node $WF/installer/install.mjs --target $APP --harness cursor --server https://wf.example.com
+```
+
+Then in `$APP`:
+
+```bash
+node .agent-workflow/wf.mjs init
+```
+
+Open `$APP` in Cursor, run `/wf-onboard`, approve rule packs (`wf init --approve-pack …`), and set `config.json` commands (`unit`, `lint`, `e2e`, `product_test_globs`, `dev_url`) for your stack.
+
+### Smoke without LLM agents (sanity)
+
+Follow `docs/PHASE1_MANUAL_TEST.md` in the workflow repo: copy planning fixtures from `.agent-workflow/test/fixtures/planning-minimal/` into `specs/spec-<id>/`, then walk gates with `wf done` / `wf approve`. Confirms hooks and stage order on **your** tree.
+
+### Full agent run (what you implemented)
+
+1. In Cursor on `$APP`: `/wf-run "Add export CSV on the orders list"` (or a Jira key if Atlassian MCP is connected).
+2. Let `/wf-start` run the planning pipeline (ingest → grill → SRS → tickets → ACs). Watch `node .agent-workflow/wf.mjs status` and `node .agent-workflow/wf.mjs tickets check`.
+3. At **`gate_spec`**: `/wf-gate-brief`, read `specs/spec-<id>/SRS.md` and `tickets/`, then `/wf-approve gate_spec`.
+4. **`feasibility`** → approve approach letter → **`tests`** (Playwright red) → **`gate_tests`** → implement → review → verify → **`gate_final`** → `/wf-pr`.
+
+### Good first features to try
+
+| Idea | Why it exercises the flow |
+|---|---|
+| Small CRUD or filter on an existing screen | REQ + UI/FE/BE tickets, a few `PRD-n.m` e2e cases |
+| “Add health check endpoint” | Mostly BE ticket, fast feasibility |
+| Bug fix with clear repro | Short grill; one REQ; minimal tickets |
+
+Avoid “rewrite the architecture” as the first run: planning grill cap and ticket traceability are easier to validate on a bounded change.
+
+### Telemetry check (optional)
+
+After a run with `--server` configured: `node .agent-workflow/wf.mjs sync`, then on Postgres query views `agent_timings` and `run_human_escalations` for your `run_id` (see `server/src/migrations/002_planning_metrics.sql`).
+
+### Where to read more
+
+- Operator flow: `docs/USER_GUIDE.md`
+- Adapter/hook behaviour: `docs/adapter-contract.md`
+- Design record: `plans/planning-stage-redesign.md`

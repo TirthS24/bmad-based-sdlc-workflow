@@ -25,13 +25,18 @@ Run these one block at a time and compare with the expectation under each.
 w run "Add items endpoint"
 ID=$(w status | sed -n 's/^run: //p')
 ```
-Expect: `branch: wf/<id>`, `stage: grill_spec`, and `git branch --show-current` prints the same `wf/<id>`.
+Expect: `branch: wf/<id>`, `stage: planning`, and `git branch --show-current` prints the same `wf/<id>`.
 
 ```bash
-printf '# Spec\n- **REQ-1** List items\n  - **success:** GET /items returns 200\n' > specs/spec-$ID/SPEC.md
-w done grill_spec --result specs/spec-$ID/SPEC.md
+# Minimal planning artifacts (same shape as automated tests)
+mkdir -p specs/spec-$ID/grill specs/spec-$ID/tickets/be specs/spec-$ID/tickets/fe
+cp $REPO/.agent-workflow/test/fixtures/planning-minimal/SRS.md specs/spec-$ID/
+cp $REPO/.agent-workflow/test/fixtures/planning-minimal/grill/questions.json specs/spec-$ID/grill/
+cp $REPO/.agent-workflow/test/fixtures/planning-minimal/tickets/be/TKT-BE-001.json specs/spec-$ID/tickets/be/
+cp $REPO/.agent-workflow/test/fixtures/planning-minimal/tickets/fe/TKT-FE-001.json specs/spec-$ID/tickets/fe/
+w done planning --result specs/spec-$ID/SRS.md
 ```
-Expect: `stage: gate_spec` and `gates: spec=pending approach=pending plan=pending tests=pending review=pending final=pending`.
+Expect: `stage: gate_spec` and `gates: spec=pending approach=pending tests=pending review=pending final=pending`.
 
 **Agents cannot skip a gate:**
 ```bash
@@ -44,9 +49,9 @@ Expect: exit 1, then a `deny` JSON (`stage gate_spec cannot write src/a.py`) and
 ```bash
 w reject gate_spec --reason "add error cases"
 ```
-Expect: `stage: grill_spec`, `attempt: 2`, `gates: spec=rejected ...`, and a `next_action` starting `Revise after gate_spec was rejected ("add error cases")`. Also `w reject gate_spec` with no reason must fail.
+Expect: `stage: planning`, `attempt: 2`, `gates: spec=rejected ...`, and a `next_action` starting `Revise after gate_spec was rejected ("add error cases")`. Also `w reject gate_spec` with no reason must fail.
 ```bash
-w done grill_spec --result specs/spec-$ID/SPEC.md
+w done planning --result specs/spec-$ID/SRS.md
 w approve gate_spec                                                    # stage: feasibility, gates: spec=approved
 ```
 
@@ -55,13 +60,11 @@ w approve gate_spec                                                    # stage: 
 printf '# Approach\nVerdict: with-changes\n## Approach A\nsmall\n## Approach B\nbig\nFits in one commit.\n' > specs/spec-$ID/approach.md
 w done feasibility
 w approve gate_approach                                                # expect: error, needs --approach A|B|C
-w approve gate_approach --approach A                                   # stage: test_plan, "approach: A"
+w approve gate_approach --approach A                                   # stage: tests, "approach: A"
 ```
 
-**Test plan and tests (gate after each):**
+**Tests (gate after):**
 ```bash
-printf '# Plan\nREQ-1\n- PRD-1.1 list items (e2e, automated)\n' > specs/spec-$ID/test-plan.md
-w done test_plan && w approve gate_plan                                # stage: tests
 node -e "const f='.agent-workflow/config.json',fs=require('fs'),c=JSON.parse(fs.readFileSync(f));c.commands.unit='echo FAILED REQ-1; exit 1';c.commands.lint='';fs.writeFileSync(f,JSON.stringify(c,null,2))"
 mkdir -p tests && echo x > tests/test_items.py
 w done tests && w approve gate_tests                                   # stage: implement
@@ -112,7 +115,7 @@ cd / && rm -rf $SB $SB.remote.git
 
 ## 5. Automated checks
 ```bash
-cd $REPO && npm test        # 96 tests, including a full spec-to-PR walk (test/pipeline.test.mjs)
+cd $REPO && npm test        # full suite, including spec-to-PR walk (test/pipeline.test.mjs)
 ```
 
 ## 6. Try it for real in Cursor (needs `gh auth login` and a GitHub `origin`)
