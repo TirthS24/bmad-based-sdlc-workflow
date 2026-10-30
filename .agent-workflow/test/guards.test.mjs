@@ -29,10 +29,10 @@ test('preToolUse: with no run any other write is allowed', (t) => {
   expectAllow(repo.guard('preToolUse', edit('src/app.py')));
 });
 
-test('preToolUse: grill_spec may write only under specs/', (t) => {
+test('preToolUse: planning may write only under specs/', (t) => {
   const { repo, id } = withRun(t);
   expectAllow(repo.guard('preToolUse', edit(`specs/spec-${id}/SPEC.md`)));
-  expectDeny(repo.guard('preToolUse', edit('src/app.py')), /stage grill_spec cannot write src\/app\.py\. Allowed: specs\/\*\*/);
+  expectDeny(repo.guard('preToolUse', edit('src/app.py')), /stage planning cannot write src\/app\.py\. Allowed: specs\/\*\*/);
 });
 
 test('preToolUse: implement writes src/ but never frozen tests', (t) => {
@@ -40,7 +40,7 @@ test('preToolUse: implement writes src/ but never frozen tests', (t) => {
   repo.setStage('implement');
   expectAllow(repo.guard('preToolUse', edit('src/app.py')));
   for (const f of ['tests/test_a.py', 'web/x.test.ts', 'lib/y.test.js', 'E2E/tests/flow.spec.ts']) {
-    expectDeny(repo.guard('preToolUse', edit(f)), new RegExp(`frozen tests: ${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is in test_globs for stage implement`));
+    expectDeny(repo.guard('preToolUse', edit(f)), new RegExp(`frozen tests: ${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is in product_test_globs for stage implement`));
   }
   expectDeny(repo.guard('preToolUse', edit('docs/readme.md')), /stage implement cannot write docs\/readme\.md/);
 });
@@ -48,7 +48,7 @@ test('preToolUse: implement writes src/ but never frozen tests', (t) => {
 test('preToolUse: review freezes tests too, verify and gates write nothing', (t) => {
   const { repo } = withRun(t);
   repo.setStage('review');
-  expectDeny(repo.guard('preToolUse', edit('tests/test_a.py')), /frozen tests: tests\/test_a\.py is in test_globs for stage review/);
+  expectDeny(repo.guard('preToolUse', edit('tests/test_a.py')), /frozen tests: tests\/test_a\.py is in product_test_globs for stage review/);
   expectAllow(repo.guard('preToolUse', edit('src/app.py')));
   for (const stage of ['verify', 'gate_spec', 'gate_final', 'pr']) {
     repo.setStage(stage);
@@ -97,7 +97,15 @@ test('beforeShellExecution: commit, push and PR creation wait for the final gate
   for (const command of ['git commit -m x', '  git   commit -am y', 'git push origin HEAD', 'git push -u origin wf/x', 'gh pr create --fill']) {
     expectDeny(repo.guard('beforeShellExecution', { command }), /blocked until the final gate is approved: /);
   }
-  for (const command of ['git status', 'git pull', 'ls', 'echo git commit', '']) {
+  // Agents chain commands; the guard looks for the subcommand at the start of any segment.
+  for (const command of [
+    'cd src && git commit -m x', 'true; git push origin HEAD', 'make || git commit -am y', 'echo ok | git commit -F -',
+    '(git commit -m x)', 'x=$(git commit -m x)', 'git -C . commit -m x', 'git -c user.name=a commit -m x',
+    'git --no-pager push', 'npm test && gh pr create --fill',
+  ]) {
+    expectDeny(repo.guard('beforeShellExecution', { command }), /blocked until the final gate is approved: /);
+  }
+  for (const command of ['git status', 'git pull', 'ls', 'echo git commit', 'git log --grep commit', 'git commit-graph write', 'grep -r "git push" docs', '']) {
     expectAllow(repo.guard('beforeShellExecution', { command }));
   }
   expectDeny(repo.guard('beforeShellExecution', { tool_input: { command: 'git commit -m x' } }), /blocked until the final gate/);

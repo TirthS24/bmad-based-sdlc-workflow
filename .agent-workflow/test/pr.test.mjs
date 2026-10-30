@@ -16,6 +16,7 @@ function readyForPr(repo, id, { summary = true } = {}) {
   if (summary) writeSummary(repo, id);
   repo.seedSpecs(id);
   repo.file('src/app.py', 'print(1)');
+  repo.run(['adr']);
   repo.commit('feat: thing');
   repo.update((s) => {
     s.current.stage = 'pr';
@@ -33,7 +34,7 @@ test('pr needs a run, the pr stage, and an approved final gate', (t) => {
   const repo = fresh(t);
   assert.match(repo.run(['pr']).stderr, /no active run/);
   repo.startRun('feat');
-  assert.match(repo.run(['pr']).stderr, /current stage is grill_spec, not pr/);
+  assert.match(repo.run(['pr']).stderr, /current stage is planning, not pr/);
   repo.setStage('pr');
   assert.match(repo.run(['pr']).stderr, /gate_final is not approved/);
 });
@@ -141,6 +142,19 @@ test('pr refuses when there is no commit since the baseline', (t) => {
   assert.equal(res.status, 1);
   assert.match(res.stderr, /no commits since [0-9a-f]{40}; commit the run files first/);
   assert.equal(remote.ghArgs(), null);
+});
+
+test('pr refuses when HEAD is not the run branch', (t) => {
+  const { repo, id } = withRun(t);
+  const remote = repo.addRemoteAndFakeGh();
+  t.after(remote.cleanup);
+  readyForPr(repo, id);
+  repo.git('checkout', '-q', '-b', 'elsewhere');
+  const res = repo.run(['pr']);
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, new RegExp(`HEAD is on elsewhere, not the run branch wf/${id}`));
+  assert.equal(remote.ghArgs(), null);
+  assert.equal(repo.state().current.stage, 'pr');
 });
 
 test('pr reports push and gh failures and stays on the pr stage', (t) => {

@@ -2,22 +2,20 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
-import { VALID_APPROACH, VALID_SPEC, VALID_TEST_PLAN, fresh, withRun } from './helpers.mjs';
+import { VALID_APPROACH, VALID_SRS, VALID_SPEC, VALID_TICKET_BE, VALID_TICKET_FE, fresh, withRun } from './helpers.mjs';
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
-const GATES = ['gate_spec', 'gate_approach', 'gate_plan', 'gate_tests', 'gate_review', 'gate_final'];
+const GATES = ['gate_spec', 'gate_approach', 'gate_tests', 'gate_review', 'gate_final'];
 const NEXT = {
   gate_spec: 'feasibility',
-  gate_approach: 'test_plan',
-  gate_plan: 'tests',
+  gate_approach: 'tests',
   gate_tests: 'implement',
   gate_review: 'verify',
   gate_final: 'pr',
 };
 const PREV = {
-  gate_spec: 'grill_spec',
+  gate_spec: 'planning',
   gate_approach: 'feasibility',
-  gate_plan: 'test_plan',
   gate_tests: 'tests',
   gate_review: 'implement',
   gate_final: 'verify',
@@ -27,7 +25,7 @@ test('approve needs a run, a known gate, and the matching stage', (t) => {
   const repo = fresh(t);
   assert.match(repo.run(['approve', 'gate_spec']).stderr, /no active run/);
   repo.startRun('feat');
-  assert.match(repo.run(['approve', 'gate_spec']).stderr, /current stage is grill_spec, not gate_spec/);
+  assert.match(repo.run(['approve', 'gate_spec']).stderr, /current stage is planning, not gate_spec/);
   assert.match(repo.run(['approve', 'gate9']).stderr, /unknown gate gate9/);
   assert.match(repo.run(['approve', 'implement']).stderr, /unknown gate implement/, 'only human stages are gates');
   assert.match(repo.run(['approve', 'gate1']).stderr, /unknown gate gate1/, 'the old gate ids are gone');
@@ -46,9 +44,9 @@ test('every gate approval opens the next stage and records who/when/hashes', (t)
     assert.equal(s.gates[gate].status, 'approved');
     assert.match(s.gates[gate].approved_at, /^\d{4}-\d\d-\d\dT/);
     assert.equal(s.gates[gate].rejections, 0);
-    assert.equal(s.gates[gate].spec_hash, sha(VALID_SPEC));
+    assert.equal(s.gates[gate].spec_hash, sha(VALID_SRS));
     assert.equal(s.gates[gate].approach_hash, sha(VALID_APPROACH));
-    assert.equal(s.gates[gate].test_plan_hash, sha(VALID_TEST_PLAN));
+    assert.ok(s.gates[gate].tickets_hash, `${gate} tickets_hash`);
   }
   assert.deepEqual(repo.events().filter((e) => e.type === 'approve').map((e) => e.gate), GATES);
 });
@@ -79,14 +77,14 @@ test('hashes are null for files that do not exist', (t) => {
   const g = repo.state().gates.gate_spec;
   assert.equal(g.spec_hash, null);
   assert.equal(g.approach_hash, null);
-  assert.equal(g.test_plan_hash, null);
+  assert.equal(g.tickets_hash, null);
 });
 
 test('reject needs a run, a gate, the matching stage and a reason', (t) => {
   const repo = fresh(t);
   assert.match(repo.run(['reject', 'gate_spec', '--reason', 'x']).stderr, /no active run/);
   repo.startRun('feat');
-  assert.match(repo.run(['reject', 'gate_spec', '--reason', 'x']).stderr, /current stage is grill_spec, not gate_spec/);
+  assert.match(repo.run(['reject', 'gate_spec', '--reason', 'x']).stderr, /current stage is planning, not gate_spec/);
   repo.setStage('gate_spec');
   assert.match(repo.run(['reject', 'gate_spec']).stderr, /reject requires --reason "<why>"/);
   assert.match(repo.run(['reject', 'gate_spec', '--reason', '   ']).stderr, /reject requires --reason/);
@@ -142,11 +140,11 @@ test('a rejected gate can be approved after the stage is redone, and counts reje
   repo.setStage('gate_spec');
   repo.run(['reject', 'gate_spec', '--reason', 'first']);
   assert.equal(repo.state().current.attempt, 2);
-  assert.equal(repo.run(['done', 'grill_spec']).status, 0);
+  assert.equal(repo.run(['done', 'planning']).status, 0);
   assert.equal(repo.state().current.stage, 'gate_spec');
   repo.run(['reject', 'gate_spec', '--reason', 'second']);
   assert.equal(repo.state().current.attempt, 3);
-  assert.equal(repo.run(['done', 'grill_spec']).status, 0);
+  assert.equal(repo.run(['done', 'planning']).status, 0);
   assert.equal(repo.run(['approve', 'gate_spec']).status, 0);
   const s = repo.state();
   assert.equal(s.gates.gate_spec.status, 'approved');
@@ -169,5 +167,5 @@ test('the status line shows every gate', (t) => {
   repo.run(['approve', 'gate_spec']);
   repo.setStage('gate_approach');
   repo.run(['reject', 'gate_approach', '--reason', 'r']);
-  assert.match(repo.run(['status']).stdout, /^gates: spec=approved approach=rejected plan=pending tests=pending review=pending final=pending$/m);
+  assert.match(repo.run(['status']).stdout, /^gates: spec=approved approach=rejected tests=pending review=pending final=pending$/m);
 });

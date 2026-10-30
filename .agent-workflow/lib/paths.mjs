@@ -3,22 +3,29 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const THIS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const WF_DIR = path.resolve(process.env.WF_DIR || THIS_DIR);
-export const REPO_ROOT = path.resolve(process.env.REPO_ROOT || path.dirname(WF_DIR));
+function wfDir() {
+  return path.resolve(process.env.WF_DIR || THIS_DIR);
+}
+export function repoRoot() {
+  return path.resolve(process.env.REPO_ROOT || path.dirname(wfDir()));
+}
+export const WF_DIR = wfDir();
+export const REPO_ROOT = repoRoot();
 
 export const PATHS = {
-  workflow: path.join(WF_DIR, 'workflow.json'),
-  config: path.join(WF_DIR, 'config.json'),
-  state: path.join(WF_DIR, 'state.json'),
-  events: path.join(WF_DIR, 'events.jsonl'),
-  allowlist: path.join(WF_DIR, 'bmad-allowlist.json'),
-  runs: path.join(WF_DIR, 'runs'),
+  workflow: path.join(wfDir(), 'workflow.json'),
+  config: path.join(wfDir(), 'config.json'),
+  state: path.join(wfDir(), 'state.json'),
+  events: path.join(wfDir(), 'events.jsonl'),
+  allowlist: path.join(wfDir(), 'bmad-allowlist.json'),
+  runs: path.join(wfDir(), 'runs'),
 };
 
 export function specDir(state) {
-  return path.join(REPO_ROOT, 'specs', `spec-${state.run.id}`);
+  return path.join(repoRoot(), 'specs', `spec-${state.run.id}`);
 }
 
 export function posixRel(file) {
-  return path.relative(REPO_ROOT, path.resolve(REPO_ROOT, file)).split(path.sep).join('/');
+  const root = repoRoot();
+  return path.relative(root, path.resolve(root, file)).split(path.sep).join('/');
 }

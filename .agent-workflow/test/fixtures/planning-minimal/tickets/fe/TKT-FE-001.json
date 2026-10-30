@@ -1,0 +1,28 @@
+{
+  "id": "TKT-FE-001",
+  "persona": "fe",
+  "title": "Frontend",
+  "purpose": "UI",
+  "description": "Surface REQ-1",
+  "priority": "P1",
+  "requirements": ["REQ-1"],
+  "depends_on": [],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "text": "Shows outcome",
+      "test_cases": [
+        {
+          "id": "PRD-1.2",
+          "title": "UI shows success",
+          "given": "page open",
+          "when": "action",
+          "then": "success visible",
+          "layer": "ui",
+          "automation": "manual"
+        }
+      ]
+    }
+  ],
+  "external": { "jira_key": null }
+}

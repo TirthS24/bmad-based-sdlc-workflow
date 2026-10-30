@@ -1,0 +1,28 @@
+{
+  "id": "TKT-BE-001",
+  "persona": "be",
+  "title": "Backend",
+  "purpose": "API",
+  "description": "Implement REQ-1",
+  "priority": "P1",
+  "requirements": ["REQ-1"],
+  "depends_on": [],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "text": "Works",
+      "test_cases": [
+        {
+          "id": "PRD-1.1",
+          "title": "Happy path",
+          "given": "system up",
+          "when": "user acts",
+          "then": "it works",
+          "layer": "ui",
+          "automation": "manual"
+        }
+      ]
+    }
+  ],
+  "external": { "jira_key": null }
+}

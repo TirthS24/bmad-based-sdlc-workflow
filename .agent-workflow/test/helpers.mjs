@@ -15,7 +15,104 @@ export const VALID_SPEC = `# Spec
 ## Capabilities
 - **REQ-1** Do the thing
   - **success:** it works
+## Non-goals
+- Nothing else.
 `;
+
+export const VALID_SRS = `# SRS
+## 1 Introduction
+Purpose: deliver the capability.
+## 2 Overall description
+One user class.
+## 3 Functional requirements
+- **REQ-1** Do the thing
+  intent: do it
+  success: it works
+## 4 External interfaces
+Web UI
+## 5 Non-functional
+Basic security
+## 6 Non-goals
+- Nothing else.
+## 7 Traceability
+REQ-1 → Q-1
+`;
+
+export const VALID_QUESTIONS = [
+  {
+    id: 'Q-1',
+    round: 1,
+    question: 'Confirm scope?',
+    options: ['yes'],
+    req_refs: ['REQ-1'],
+    status: 'answered',
+    answer: 'yes',
+    answered_by: 'human',
+    sources: [],
+  },
+];
+
+export const VALID_TICKET_BE = {
+  id: 'TKT-BE-001',
+  persona: 'be',
+  title: 'Backend',
+  purpose: 'API',
+  description: 'Implement REQ-1',
+  priority: 'P1',
+  requirements: ['REQ-1'],
+  depends_on: [],
+  acceptance_criteria: [{
+    id: 'AC-1',
+    text: 'Works',
+    test_cases: [{
+      id: 'PRD-1.1',
+      title: 'Happy path',
+      given: 'system up',
+      when: 'user acts',
+      then: 'it works',
+      layer: 'ui',
+      automation: 'manual',
+    }],
+  }],
+  external: { jira_key: null },
+};
+
+export const VALID_TICKET_FE = {
+  id: 'TKT-FE-001',
+  persona: 'fe',
+  title: 'Frontend',
+  purpose: 'UI',
+  description: 'Surface REQ-1',
+  priority: 'P1',
+  requirements: ['REQ-1'],
+  depends_on: [],
+  acceptance_criteria: [{
+    id: 'AC-1',
+    text: 'Shows outcome',
+    test_cases: [{
+      id: 'PRD-1.2',
+      title: 'UI shows success',
+      given: 'page open',
+      when: 'action',
+      then: 'success visible',
+      layer: 'ui',
+      automation: 'manual',
+    }],
+  }],
+  external: { jira_key: null },
+};
+
+export const ADR = `## Decision
+Approach A: smallest change that works.
+## Non-functional
+- N/A, no load or data change.
+## Risks
+- Low.
+## Rollback
+- Revert the commit.
+`;
+
+export const AXES = '## Standards\nopen: 0\n## Spec conformance\nopen: 0\n## Approach conformance\nopen: 0\n## Test quality\nopen: 0\n';
 
 export const VALID_APPROACH = `# Approach
 Verdict: with-changes
@@ -24,7 +121,7 @@ Small change.
 ## Approach B
 Bigger change.
 Fits in one commit.
-`;
+${ADR}`;
 
 export const VALID_TEST_PLAN = `# Test plan
 - PRD-1.1 REQ-1 happy path (e2e, automated)
@@ -37,14 +134,28 @@ export function makeRepo() {
   for (const f of ['workflow.json', 'config.json', 'bmad-allowlist.json']) {
     fs.copyFileSync(path.join(SRC_DIR, f), path.join(wfDir, f));
   }
+  // Baseline config for the older tests: one flat test_globs list (read as product tests)
+  // and no product/unit split. Phase 2 tests override with repo.config().
+  const cfgFile = path.join(wfDir, 'config.json');
+  const base = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+  delete base.product_test_globs;
+  delete base.unit_test_globs;
+  base.test_globs = ['tests/**/*.py', '**/*.test.ts', '**/*.test.js', 'E2E/tests/**/*.spec.ts'];
+  base.commands = { ...base.commands, unit: 'pytest', lint: 'yarn lint' };
+  fs.writeFileSync(cfgFile, JSON.stringify(base, null, 2));
   const git = (...args) => spawnSync('git', [...GIT, ...args], { cwd: root, encoding: 'utf8' });
   git('init', '-q');
   git('commit', '--allow-empty', '-q', '-m', 'init');
 
-  const env = { ...process.env, WF_DIR: wfDir, REPO_ROOT: root };
+  const env = { ...process.env, WF_DIR: wfDir, REPO_ROOT: root, WF_NO_AUTOSYNC: '1' };
+  const prevRoot = process.env.REPO_ROOT;
+  const prevWf = process.env.WF_DIR;
+  process.env.REPO_ROOT = root;
+  process.env.WF_DIR = wfDir;
   const repo = {
     root,
     wfDir,
+    env,
     git,
     run(args, { input = '', env: extra = {} } = {}) {
       const res = spawnSync(process.execPath, [WF_ENTRY, ...args], {
@@ -110,9 +221,15 @@ export function makeRepo() {
       git('commit', '-q', '-m', msg);
     },
     seedSpecs(id) {
-      repo.file(`specs/spec-${id}/SPEC.md`, VALID_SPEC);
+      this.seedPlanning(id);
       repo.file(`specs/spec-${id}/approach.md`, VALID_APPROACH);
-      repo.file(`specs/spec-${id}/test-plan.md`, VALID_TEST_PLAN);
+    },
+    seedPlanning(id) {
+      const base = `specs/spec-${id}`;
+      repo.file(`${base}/SRS.md`, VALID_SRS);
+      repo.file(`${base}/grill/questions.json`, `${JSON.stringify(VALID_QUESTIONS, null, 2)}\n`);
+      repo.file(`${base}/tickets/be/TKT-BE-001.json`, `${JSON.stringify(VALID_TICKET_BE, null, 2)}\n`);
+      repo.file(`${base}/tickets/fe/TKT-FE-001.json`, `${JSON.stringify(VALID_TICKET_FE, null, 2)}\n`);
     },
     // A local bare repo as `origin`, and a fake `gh` on PATH that records its arguments.
     addRemoteAndFakeGh({ ghExit = 0, ghOut = 'https://github.com/acme/app/pull/7' } = {}) {
@@ -131,6 +248,10 @@ export function makeRepo() {
       };
     },
     cleanup() {
+      if (prevRoot === undefined) delete process.env.REPO_ROOT;
+      else process.env.REPO_ROOT = prevRoot;
+      if (prevWf === undefined) delete process.env.WF_DIR;
+      else process.env.WF_DIR = prevWf;
       fs.rmSync(root, { recursive: true, force: true });
     },
   };

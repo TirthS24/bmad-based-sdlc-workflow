@@ -2,9 +2,10 @@
 //   { permission: 'allow' | 'deny', message?, followup? }
 // Rendering the decision for a specific harness is the adapter's job.
 import { appendEvent, saveState, stageById } from './io.mjs';
-import { expandWritePatterns, matchesAnyGlob, writesAllowed } from './globs.mjs';
+import { expandWritePatterns, matchesAnyGlob, productGlobs, writesAllowed } from './globs.mjs';
 import { posixRel } from './paths.mjs';
-import { combinedOutput, runVerifyTiers } from './verify.mjs';
+import { readE2eReport } from './e2e.mjs';
+import { combinedOutput, e2eReportPath, runVerifyTiers } from './verify.mjs';
 
 const allow = (extra = {}) => ({ permission: 'allow', ...extra });
 const deny = (message) => ({ permission: 'deny', message });
@@ -37,8 +38,8 @@ export function guardPreToolUse(input, state, workflow, config) {
   const stg = stageById(workflow, state.current.stage);
   const patterns = expandWritePatterns(stg?.writes || [], config);
   if ((state.current.stage === 'implement' || state.current.stage === 'review')
-    && matchesAnyGlob(rel, config.test_globs)) {
-    return deny(`frozen tests: ${rel} is in test_globs for stage ${state.current.stage}`);
+    && matchesAnyGlob(rel, productGlobs(config))) {
+    return deny(`frozen tests: ${rel} is in product_test_globs for stage ${state.current.stage}`);
   }
   if (!writesAllowed(rel, patterns)) {
     return deny(`stage ${state.current.stage} cannot write ${rel}. Allowed: ${patterns.join(', ') || '(none)'}`);
@@ -53,14 +54,22 @@ export function guardShell(input, state, workflow) {
   return deny(`blocked until the final gate is approved: ${input.command}`);
 }
 
+// Ids of what is still failing. Playwright's list reporter prints every title, passing
+// or not, so e2e failures come from its JSON report; other tiers fall back to a scan
+// of their own output, and only when that tier failed.
 function failingNamesFromVerify() {
-  const results = runVerifyTiers(['unit']);
-  const out = combinedOutput(results);
+  const results = runVerifyTiers(['unit', 'e2e']);
+  const failed = results.filter((r) => !r.skipped && r.code !== 0);
   const names = new Set();
-  const re = /\b(REQ-\d+|TECH-[\w-]+|PRD-\d+\.\d+)\b/g;
-  let m;
-  while ((m = re.exec(out))) names.add(m[1]);
-  return { failed: results.some((r) => !r.skipped && r.code !== 0), names: [...names].sort(), out };
+  for (const r of failed) {
+    const tests = r.tier === 'e2e' ? readE2eReport(e2eReportPath()) : null;
+    if (tests) {
+      for (const t of tests) if (t.outcome === 'failed') t.ids.forEach((id) => names.add(id));
+      continue;
+    }
+    for (const m of combinedOutput([r]).matchAll(/\b(REQ-\d+|TECH-[\w-]+|PRD-\d+\.\d+)\b/g)) names.add(m[1]);
+  }
+  return { failed: failed.length > 0, names: [...names].sort() };
 }
 
 function sameSet(a, b) {
@@ -91,6 +100,7 @@ export function guardStop(input, state, config) {
     return allow();
   }
   saveState(state);
+  appendEvent('loop_round', { stage: 'implement', round: state.loops.implement.round, cap });
   const followup = [
     `Implement loop round ${state.loops.implement.round}/${cap}. Unit tests still failing.`,
     'Re-run the implementer subagent for one more attempt. Do not edit frozen tests.',

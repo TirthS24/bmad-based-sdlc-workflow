@@ -26,8 +26,14 @@
       {
         "command": "node .agent-workflow/wf.mjs guard stop",
         "loop_limit": 5,
-        "timeout": 120
+        "timeout": 600
       }
+    ],
+    "subagentStart": [
+      { "command": "node .agent-workflow/wf.mjs log subagentStart", "timeout": 5 }
+    ],
+    "subagentStop": [
+      { "command": "node .agent-workflow/wf.mjs log subagentStop", "timeout": 5 }
     ]
   }
 }

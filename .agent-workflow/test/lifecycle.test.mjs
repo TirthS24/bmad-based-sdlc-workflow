@@ -11,12 +11,11 @@ test('run creates state, spec dir, run dir and a run event', (t) => {
   assert.equal(res.status, 0);
   const s = repo.state();
   assert.match(s.run.id, /^\d{8}-my-feature$/);
-  assert.equal(s.current.stage, 'grill_spec');
+  assert.equal(s.current.stage, 'planning');
   assert.equal(s.current.attempt, 1);
   assert.deepEqual(s.gates, {
     gate_spec: { status: 'pending' },
     gate_approach: { status: 'pending' },
-    gate_plan: { status: 'pending' },
     gate_tests: { status: 'pending' },
     gate_review: { status: 'pending' },
     gate_final: { status: 'pending' },
@@ -33,9 +32,9 @@ test('run creates state, spec dir, run dir and a run event', (t) => {
   assert.match(s.run.baseline_sha, /^[0-9a-f]{40}$/);
   assert.ok(repo.exists(`specs/spec-${s.run.id}`));
   assert.ok(repo.exists(`.agent-workflow/runs/${s.run.id}`));
-  assert.match(res.stdout, /stage: grill_spec/);
+  assert.match(res.stdout, /stage: planning/);
   assert.match(res.stdout, /next_action: Run \/wf-start/);
-  assert.ok(res.stdout.includes(`specs/spec-${s.run.id}/SPEC.md`), '<id> placeholder is filled');
+  assert.ok(res.stdout.includes(`specs/spec-${s.run.id}/SRS.md`), '<id> placeholder is filled');
   assert.deepEqual(repo.events().map((e) => e.type), ['run']);
 });
 
@@ -65,7 +64,7 @@ test('status --hook wraps the text as additional_context', (t) => {
   assert.match(none.additional_context, /No active workflow run/);
   repo.startRun('feat');
   const active = JSON.parse(repo.run(['status', '--hook']).stdout);
-  assert.match(active.additional_context, /stage: grill_spec/);
+  assert.match(active.additional_context, /stage: planning/);
 });
 
 test('status prints run, branch, stage, gates, loop, writes and next_action', (t) => {
@@ -73,9 +72,9 @@ test('status prints run, branch, stage, gates, loop, writes and next_action', (t
   const out = repo.run(['status']).stdout;
   assert.ok(out.includes(`run: ${id}`));
   assert.ok(out.includes(`branch: wf/${id}`));
-  assert.match(out, /^stage: grill_spec$/m);
+  assert.match(out, /^stage: planning$/m);
   assert.match(out, /^attempt: 1$/m);
-  assert.match(out, /^gates: spec=pending approach=pending plan=pending tests=pending review=pending final=pending$/m);
+  assert.match(out, /^gates: spec=pending approach=pending tests=pending review=pending final=pending$/m);
   assert.match(out, /^loop: 0$/m);
   assert.match(out, /^writes: allowed: specs\/\*\* \/ blocked: protected$/m);
   assert.match(out, /^next_action: /m);
@@ -121,8 +120,27 @@ test('pause archives state, resume restores it', (t) => {
   const resumed = repo.run(['resume']);
   assert.equal(resumed.status, 0);
   assert.equal(repo.state().run.id, id);
-  assert.match(resumed.stdout, /stage: grill_spec/);
+  assert.match(resumed.stdout, /stage: planning/);
   assert.deepEqual(repo.events().map((e) => e.type), ['run', 'pause', 'resume']);
+});
+
+test('resume maps a paused schema-2 run to schema 3 stage names', (t) => {
+  const { repo, id } = withRun(t);
+  repo.update((s) => {
+    s.schema = 2;
+    s.current.stage = 'grill_spec';
+    s.stages = { grill_spec: { status: 'done' }, test_plan: { status: 'pending' } };
+    s.gates = { ...s.gates, gate_plan: { status: 'pending' } };
+  });
+  repo.run(['pause']);
+  const resumed = repo.run(['resume', id]);
+  assert.equal(resumed.status, 0);
+  const s = repo.state();
+  assert.equal(s.schema, 3);
+  assert.equal(s.current.stage, 'planning');
+  assert.ok(s.stages.planning);
+  assert.equal(s.stages.test_plan, undefined);
+  assert.equal(s.gates.gate_plan, undefined);
 });
 
 test('resume refuses an active run, an unknown id, and ambiguity', (t) => {
@@ -184,7 +202,7 @@ test('verify reports each tier and exits with the failing tier code', (t) => {
   repo.config({ commands: { unit: 'exit 0', lint: '', complexity: '', e2e: '', a11y: '' } });
   const ok = repo.run(['verify']);
   assert.equal(ok.status, 0);
-  assert.equal(ok.stdout, 'unit: ok\nlint: skip\ncomplexity: skip\ne2e: skip\na11y: skip\n');
+  assert.equal(ok.stdout, 'unit: ok\nlint: skip\ntypecheck: skip\nformat: skip\ncomplexity: skip\ne2e: skip\na11y: skip\n');
   repo.config({ commands: { unit: 'echo boom; exit 3' } });
   const bad = repo.run(['verify']);
   assert.equal(bad.status, 3);
@@ -195,7 +213,7 @@ test('CLI usage and unknown commands', (t) => {
   const repo = fresh(t);
   const none = repo.run([]);
   assert.equal(none.status, 1);
-  assert.match(none.stdout, /^usage: wf\.mjs <run\|status\|done\|approve\|reject\|pr\|verify\|guard\|log\|prune\|abort\|pause\|resume> \[args\]$/m);
+  assert.match(none.stdout, /^usage: wf\.mjs <init\|gate-check\|ci-check\|login\|logout\|whoami\|sync\|report-failure\|doctor\|adr\|brief\|goto\|escalation\|run\|status\|done\|tickets\|agent\|approve\|reject\|pr\|verify\|guard\|log\|prune\|abort\|pause\|resume> \[args\]$/m);
   assert.equal(repo.run(['help']).status, 0);
   assert.equal(repo.run(['--help']).status, 0);
   const bad = repo.run(['frobnicate']);

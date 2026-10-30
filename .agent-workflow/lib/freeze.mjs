@@ -1,8 +1,8 @@
-// Hash of every file matching test_globs, stored when the tests stage completes.
+// Hash of every file matching the product test globs, stored when the tests stage completes.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { matchesAnyGlob } from './globs.mjs';
+import { matchesAnyGlob, productGlobs } from './globs.mjs';
 import { REPO_ROOT, posixRel } from './paths.mjs';
 
 export function collectTestFiles(config) {
@@ -19,7 +19,7 @@ export function collectTestFiles(config) {
   walk(REPO_ROOT);
   return files
     .map((f) => posixRel(f))
-    .filter((rel) => matchesAnyGlob(rel, config.test_globs))
+    .filter((rel) => matchesAnyGlob(rel, productGlobs(config)))
     .sort();
 }
 

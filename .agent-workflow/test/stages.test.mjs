@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { VALID_APPROACH, VALID_SPEC, VALID_TEST_PLAN, withRun } from './helpers.mjs';
+import { ADR, AXES, VALID_APPROACH, VALID_SRS, VALID_SPEC, withRun } from './helpers.mjs';
 
 const fails = (res, re) => {
   assert.equal(res.status, 1, res.stdout);
@@ -12,43 +12,53 @@ const fails = (res, re) => {
 
 test('done needs an active run, the current stage, and a non-human stage', (t) => {
   const { repo } = withRun(t);
-  fails(repo.run(['done', 'feasibility']), /current stage is grill_spec, not feasibility/);
-  fails(repo.run(['done', 'bogus']), /current stage is grill_spec, not bogus/);
+  fails(repo.run(['done', 'feasibility']), /current stage is planning, not feasibility/);
+  fails(repo.run(['done', 'bogus']), /current stage is planning, not bogus/);
   repo.setStage('gate_spec');
   fails(repo.run(['done', 'gate_spec']), /human gates use wf approve, not wf done/);
   repo.setStage('nonexistent');
   fails(repo.run(['done', 'nonexistent']), /unknown stage nonexistent/);
   repo.run(['abort']);
-  fails(repo.run(['done', 'grill_spec']), /no active run/);
+  fails(repo.run(['done', 'planning']), /no active run/);
 });
 
-test('grill_spec: needs SPEC.md, no open questions, REQ ids and success lines', (t) => {
+test('planning: needs SRS.md, questions, tickets, REQ ids and success lines', (t) => {
   const { repo, id } = withRun(t);
-  const spec = `specs/spec-${id}/SPEC.md`;
-  fails(repo.run(['done', 'grill_spec']), /postcondition failed: missing specs\/spec-.*\/SPEC\.md/);
-  repo.file(spec, `${VALID_SPEC}\n[OPEN QUESTION] who?\n`);
-  fails(repo.run(['done', 'grill_spec']), /SPEC\.md still contains \[OPEN QUESTION\] markers/);
-  repo.file(spec, '# Spec\nno ids here\n');
-  fails(repo.run(['done', 'grill_spec']), /SPEC\.md has no numbered REQ-n IDs/);
-  repo.file(spec, '# Spec\n- **REQ-1** Do the thing\n  - detail only\n');
-  fails(repo.run(['done', 'grill_spec']), /REQ-1 is missing a success condition/);
-  repo.file(spec, VALID_SPEC);
-  const ok = repo.run(['done', 'grill_spec', '--result', spec]);
+  const srs = `specs/spec-${id}/SRS.md`;
+  fails(repo.run(['done', 'planning']), /postcondition failed: missing specs\/spec-.*\/SRS\.md/);
+  repo.file(srs, `${VALID_SRS}\n[OPEN QUESTION] who?\n`);
+  fails(repo.run(['done', 'planning']), /SRS\.md still contains \[OPEN QUESTION\] markers/);
+  repo.file(srs, VALID_SRS);
+  fails(repo.run(['done', 'planning']), /missing grill\/questions\.json/);
+  repo.seedPlanning(id);
+  const ok = repo.run(['done', 'planning', '--result', srs]);
   assert.equal(ok.status, 0, ok.stderr);
   const s = repo.state();
   assert.equal(s.current.stage, 'gate_spec');
   assert.equal(s.current.attempt, 1);
-  assert.equal(s.stages.grill_spec.status, 'done');
-  assert.equal(s.stages.grill_spec.result, spec);
-  assert.ok(s.stages.grill_spec.finished_at);
-  assert.match(s.current.next_action, /^Human: review SPEC\.md/);
-  assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'done', stage: 'grill_spec', next: 'gate_spec', result: spec });
+  assert.equal(s.stages.planning.status, 'done');
+  assert.equal(s.stages.planning.result, srs);
+  assert.ok(s.stages.planning.finished_at);
+  assert.match(s.current.next_action, /^Human: review SRS\.md/);
+  assert.deepEqual(repo.events().at(-1), {
+    ts: repo.events().at(-1).ts,
+    type: 'done',
+    stage: 'planning',
+    next: 'gate_spec',
+    result: srs,
+    human_escalations: 1,
+  });
 });
 
-test('grill_spec: every REQ needs its own success line', (t) => {
+test('planning: every REQ needs its own success line', (t) => {
   const { repo, id } = withRun(t);
-  repo.file(`specs/spec-${id}/SPEC.md`, '# Spec\n- **REQ-1** one\n  - **success:** yes\n- **REQ-2** two\n  - nothing\n');
-  fails(repo.run(['done', 'grill_spec']), /REQ-2 is missing a success condition/);
+  repo.seedPlanning(id);
+  const bad = VALID_SRS.replace(
+    '## 7 Traceability',
+    '- **REQ-2** second\n  intent: more\n  detail only\n## 7 Traceability',
+  );
+  repo.file(`specs/spec-${id}/SRS.md`, bad);
+  fails(repo.run(['done', 'planning']), /REQ-2 is missing a success condition/);
 });
 
 test('feasibility: verdict, two approaches, single-commit line', (t) => {
@@ -56,11 +66,11 @@ test('feasibility: verdict, two approaches, single-commit line', (t) => {
   repo.setStage('feasibility');
   const p = `specs/spec-${id}/approach.md`;
   fails(repo.run(['done', 'feasibility']), /missing specs\/spec-.*\/approach\.md/);
-  repo.file(p, '# Approach\n## A\n## B\none commit\n');
+  repo.file(p, `# Approach\n## A\n## B\none commit\n${ADR}`);
   fails(repo.run(['done', 'feasibility']), /approach\.md needs a verdict: as-is \/ with-changes \/ not-satisfiable/);
-  repo.file(p, '# Approach\nVerdict: as-is\n## Only one\none commit\n');
+  repo.file(p, `# Approach\nVerdict: as-is\n## Only one\none commit\n${ADR}`);
   fails(repo.run(['done', 'feasibility']), /approach\.md needs at least 2 approaches/);
-  repo.file(p, '# Approach\nVerdict: as-is\n## A\n## B\n');
+  repo.file(p, `# Approach\nVerdict: as-is\n## A\n## B\n${ADR}`);
   fails(repo.run(['done', 'feasibility']), /approach\.md needs a single-commit-fit line/);
   repo.file(p, VALID_APPROACH);
   assert.equal(repo.run(['done', 'feasibility', '--result', p]).status, 0);
@@ -70,44 +80,15 @@ test('feasibility: verdict, two approaches, single-commit line', (t) => {
 test('feasibility: two named approaches count even without headings', (t) => {
   const { repo, id } = withRun(t);
   repo.setStage('feasibility');
-  repo.file(`specs/spec-${id}/approach.md`, 'Verdict: as-is\nApproach A is small. Approach B is big. one commit.\n');
+  repo.file(`specs/spec-${id}/approach.md`, `Verdict: as-is\nApproach A is small. Approach B is big. one commit.\n${ADR}`);
   assert.equal(repo.run(['done', 'feasibility']).status, 0);
-});
-
-test('test_plan: covers every REQ and tags every scenario', (t) => {
-  const { repo, id } = withRun(t);
-  repo.setStage('test_plan');
-  const dir = `specs/spec-${id}`;
-  fails(repo.run(['done', 'test_plan']), /missing SPEC\.md/);
-  repo.file(`${dir}/SPEC.md`, VALID_SPEC);
-  fails(repo.run(['done', 'test_plan']), /missing test-plan\.md/);
-  repo.file(`${dir}/test-plan.md`, '# Plan\n- PRD-1.1 (e2e, automated)\n');
-  fails(repo.run(['done', 'test_plan']), /test-plan\.md has no scenario for REQ-1/);
-  repo.file(`${dir}/test-plan.md`, '# Plan\nREQ-1 covered.\n');
-  fails(repo.run(['done', 'test_plan']), /test-plan\.md has no PRD-n\.m or TECH-\* scenarios/);
-  repo.file(`${dir}/test-plan.md`, '# Plan\nREQ-1\n- PRD-1.1 happy path (automated)\n');
-  fails(repo.run(['done', 'test_plan']), /scenario missing layer: - PRD-1\.1 happy path \(automated\)/);
-  repo.file(`${dir}/test-plan.md`, '# Plan\nREQ-1\n- PRD-1.1 happy path (e2e)\n');
-  fails(repo.run(['done', 'test_plan']), /scenario missing automated\/manual\/N\/A tag: - PRD-1\.1 happy path \(e2e\)/);
-  repo.file(`${dir}/test-plan.md`, VALID_TEST_PLAN);
-  assert.equal(repo.run(['done', 'test_plan']).status, 0);
-  assert.equal(repo.state().current.stage, 'gate_plan');
-  assert.match(repo.state().current.next_action, /^Human: review test-plan\.md/);
-});
-
-test('test_plan: TECH scenarios are checked too', (t) => {
-  const { repo, id } = withRun(t);
-  repo.setStage('test_plan');
-  repo.file(`specs/spec-${id}/SPEC.md`, VALID_SPEC);
-  repo.file(`specs/spec-${id}/test-plan.md`, 'REQ-1\n- TECH-api-404 returns 404 (api, automated)\n');
-  assert.equal(repo.run(['done', 'test_plan']).status, 0);
 });
 
 test('tests: new tests must fail and cite an id, then the freeze hash is stored', (t) => {
   const { repo } = withRun(t);
   repo.setStage('tests');
   repo.config({ commands: { unit: 'exit 0' } });
-  fails(repo.run(['done', 'tests']), /new tests must fail \(wf verify unit exited 0\)/);
+  fails(repo.run(['done', 'tests']), /new tests must fail \(the unit tier exited 0\)/);
   repo.config({ commands: { unit: 'echo boom; exit 1' } });
   fails(repo.run(['done', 'tests']), /failing tests must cite REQ \/ TECH \/ PRD ids/);
   repo.config({ commands: { unit: 'echo "FAILED REQ-1 happy"; exit 1' } });
@@ -157,29 +138,39 @@ test('implement: unit and lint must pass', (t) => {
   assert.equal(repo.state().current.stage, 'review');
 });
 
-test('review: open high / decision-needed findings block verify', (t) => {
+test('review: open high findings block, decision-needed goes to the gate', (t) => {
   const { repo } = withRun(t);
   repo.setStage('review');
   fails(repo.run(['done', 'review', '--result', 'review.md']), /missing review output: review\.md/);
-  repo.file('review.md', '- [high] SQL injection in handler\n');
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review still has open high \/ decision-needed findings/);
-  repo.file('review.md', '- [decision-needed] pick a queue\n');
-  fails(repo.run(['done', 'review', '--result', 'review.md']), /review still has open high/);
-  repo.file('review.md', '- [medium] rename helper\nopen: 0\n');
+  repo.file('review.md', `${AXES}- [high] SQL injection in handler\n`);
+  fails(repo.run(['done', 'review', '--result', 'review.md']), /review still has open high findings \(1\): - \[high\] SQL injection/);
+  repo.file('review.md', `${AXES}- [medium] rename helper\n- [decision-needed] pick a queue\n`);
   assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0);
   assert.equal(repo.state().current.stage, 'gate_review');
 });
 
-test('review: "no findings tagged", or any of resolved / fixed / closed, lets the stage through', (t) => {
+test('review: each high finding is judged on its own line', (t) => {
   const { repo } = withRun(t);
-  for (const text of [
-    'no findings tagged high\n',
+  const blocked = [
+    '- [high] src/a.py:3 - injection - use params\n',
     '- [high] bug\nresolved in round 2\n',
     '- [high] bug fixed\n',
+    '- [high][resolved] a\n* **high**: b\n',
+    'no findings tagged\n- [high] still here\n',
+  ];
+  for (const text of blocked) {
+    repo.setStage('review');
+    repo.file('review.md', AXES + text);
+    fails(repo.run(['done', 'review', '--result', 'review.md']), /review still has open high findings/);
+  }
+  for (const text of [
+    'no findings tagged high\n',
+    '- [high][resolved] src/a.py:3 - injection - use params\n',
+    '- [low] high memory use in a loop\n',
     'all good\n',
   ]) {
     repo.setStage('review');
-    repo.file('review.md', text);
+    repo.file('review.md', AXES + text);
     assert.equal(repo.run(['done', 'review', '--result', 'review.md']).status, 0, text);
   }
 });
@@ -199,7 +190,7 @@ test('verify: runs every tier and needs a non-empty evidence bundle', (t) => {
   assert.equal(repo.state().current.stage, 'gate_final');
   assert.match(repo.state().current.next_action, /^Human: read the evidence bundle/);
   assert.deepEqual(repo.state().stages.verify.tiers.map((t) => [t.tier, t.skipped, t.code]), [
-    ['unit', false, 0], ['lint', false, 0], ['complexity', true, 0], ['e2e', true, 0], ['a11y', true, 0],
+    ['unit', false, 0], ['lint', false, 0], ['typecheck', true, 0], ['format', true, 0], ['complexity', true, 0], ['e2e', true, 0], ['a11y', true, 0],
   ]);
 });
 
@@ -241,13 +232,13 @@ test('stage order matches workflow.json', (t) => {
   assert.deepEqual(
     wf.stages.map((s) => s.id),
     [
-      'grill_spec', 'gate_spec', 'feasibility', 'gate_approach', 'test_plan', 'gate_plan', 'tests', 'gate_tests',
+      'planning', 'gate_spec', 'feasibility', 'gate_approach', 'tests', 'gate_tests',
       'implement', 'review', 'gate_review', 'verify', 'gate_final', 'pr',
     ],
   );
   assert.deepEqual(
     wf.stages.filter((s) => s.executor === 'human').map((s) => s.id),
-    ['gate_spec', 'gate_approach', 'gate_plan', 'gate_tests', 'gate_review', 'gate_final'],
+    ['gate_spec', 'gate_approach', 'gate_tests', 'gate_review', 'gate_final'],
   );
   // implementation is the only working stage whose exit has no human gate
   const ids = wf.stages.map((x) => x.id);

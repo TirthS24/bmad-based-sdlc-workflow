@@ -1,6 +1,6 @@
 ---
 name: wf-approve
-description: "Pipeline stage: human gate approval. Invoked only by the human at a gate (gate_spec, gate_approach, gate_plan, gate_tests, gate_review, gate_final)."
+description: "Pipeline stage: human gate approval. Invoked only by the human at a gate."
 disable-model-invocation: true
 ---
 
@@ -11,16 +11,15 @@ disable-model-invocation: true
 
 | Gate | Read | Approving means |
 |---|---|---|
-| `gate_spec` | `specs/spec-<run-id>/SPEC.md` | the product decisions are final |
-| `gate_approach` | `specs/spec-<run-id>/approach.md` | you choose approach A, B or C |
-| `gate_plan` | `specs/spec-<run-id>/test-plan.md` | the test scenarios are right |
-| `gate_tests` | the new failing tests | the tests are frozen and implementation may start |
-| `gate_review` | `.agent-workflow/runs/<id>/review.md` | review findings are handled |
-| `gate_final` | `.agent-workflow/runs/<id>/evidence/` | commit, push and the PR are unlocked |
+| `gate_spec` | `SRS.md` and `tickets/` | product requirements and persona tickets are final |
+| `gate_approach` | `approach.md` | you choose approach A, B or C |
+| `gate_tests` | the new failing tests | tests are frozen and implementation may start |
+| `gate_review` | `review.md` | review findings are handled |
+| `gate_final` | `evidence/` | commit, push and the PR are unlocked |
 
 ## What this stage does
 
-Records the human's decision. Never approve on the human's behalf and never pick the approach letter for them. If the human wants changes, use `/wf-reject` instead.
+Records the human's decision. Never approve on their behalf. For changes, use `/wf-reject`.
 
 ## On finish
 

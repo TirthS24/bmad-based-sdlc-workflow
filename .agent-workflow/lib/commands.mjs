@@ -6,15 +6,24 @@ import { freezeHash } from './freeze.mjs';
 import { evaluate } from './guards.mjs';
 import {
   appendEvent, die, git, loadConfig, loadState, loadWorkflow, parseHookPayload,
-  readJson, readStdin, saveState, sha256File, stageById,
+  readJson, readStdin, readText, saveState, sha256File, stageById,
 } from './io.mjs';
+import { capture } from './telemetry/capture.mjs';
+import { loginProblem } from './telemetry/client.mjs';
+import { rewind } from './rewind.mjs';
 import { PATHS, REPO_ROOT, posixRel, specDir } from './paths.mjs';
-import { buildPrBody, prSummaryPath, prTitle } from './pr.mjs';
+import { adrCommitted } from './adr.mjs';
+import { buildPrBody, decisionRecord, prSummaryPath, prTitle } from './pr.mjs';
 import { commitsSince, lastVerify, postcondition } from './postconditions.mjs';
+import {
+  checkQuestions, checkTickets, escalationCount, srsSectionChecks, ticketsHash,
+} from './tickets.mjs';
 import { emptyState, fillAction, formatStatus } from './state.mjs';
-import { runVerifyTiers } from './verify.mjs';
+import { ALL_TIERS, runVerifyTiers } from './verify.mjs';
 
 export function cmdRun(source) {
+  const needLogin = loginProblem();
+  if (needLogin) die(needLogin);
   if (loadState()?.run?.id) {
     die('a run is already active; /wf-abort or /wf-pause first');
   }
@@ -58,7 +67,7 @@ export function cmdStatus(flags, adapter) {
       process.exit(1);
     }
     if (state.escalations?.length) {
-      process.stderr.write('escalation pending\n');
+      process.stderr.write('escalation pending (see: wf escalation list)\n');
       process.exit(1);
     }
     process.exit(0);
@@ -96,8 +105,38 @@ export function cmdDone(stage, resultPath) {
   state.current.attempt = 1;
   state.current.next_action = fillAction(next, state.run.id);
   saveState(state);
-  appendEvent('done', { stage, next, result: resultPath || null });
+  appendEvent('done', {
+    stage,
+    next,
+    result: resultPath || null,
+    ...(stage === 'planning' ? { human_escalations: escalationCount(state) } : {}),
+  });
   process.stdout.write(`${formatStatus(state)}\n`);
+}
+
+export function cmdTickets(sub) {
+  if (sub !== 'check') die('usage: wf tickets check');
+  const state = loadState();
+  if (!state?.run?.id) die('no active run');
+  const srs = readText(path.join(specDir(state), 'SRS.md'));
+  const problems = [
+    ...srsSectionChecks(srs),
+    ...checkQuestions(state),
+    ...checkTickets(state, srs || ''),
+  ];
+  if (problems.length) {
+    for (const p of problems) process.stderr.write(`${p}\n`);
+    process.exit(1);
+  }
+  process.stdout.write('tickets ok\n');
+}
+
+export function cmdAgent(sub, name) {
+  if (!name) die('usage: wf agent start|end <agent-type>');
+  const at = new Date().toISOString();
+  if (sub === 'start') appendEvent('subagent_start', { agent: name, started_at: at });
+  else if (sub === 'end') appendEvent('subagent_stop', { agent: name, status: 'completed', ended_at: at });
+  else die('usage: wf agent start|end <agent-type>');
 }
 
 function fileHashIfExists(rel) {
@@ -127,9 +166,9 @@ export function cmdApprove(gate, approach) {
     approved_at: new Date().toISOString(),
     rejections: state.rejections.filter((r) => r.gate === gate).length,
     ...(gate === 'gate_approach' ? { approach } : {}),
-    spec_hash: fileHashIfExists(`${dir}/SPEC.md`),
+    spec_hash: fileHashIfExists(`${dir}/SRS.md`),
     approach_hash: fileHashIfExists(`${dir}/approach.md`),
-    test_plan_hash: fileHashIfExists(`${dir}/test-plan.md`),
+    tickets_hash: ticketsHash(state),
   };
   state.current.stage = stg.next;
   state.current.attempt = 1;
@@ -149,15 +188,9 @@ export function cmdReject(gate, reason) {
   const at = new Date().toISOString();
   state.rejections.push({ gate, reason: String(reason).trim(), at });
   const count = state.rejections.filter((r) => r.gate === gate).length;
-  state.gates[gate] = { status: 'rejected', reason: String(reason).trim(), rejected_at: at, rejections: count };
   // Everything from the target stage up to the gate has to be done again.
-  const ids = workflow.stages.map((s) => s.id);
-  for (const id of ids.slice(ids.indexOf(target), ids.indexOf(gate))) delete state.stages[id];
-  if (target === 'tests') state.freeze.test_files_hash = null;
-  if (target === 'implement') {
-    state.loops.implement = { round: 0, last_failing: [] };
-    state.loops.review = { round: 0 };
-  }
+  rewind(state, workflow, target, gate);
+  state.gates[gate] = { status: 'rejected', reason: String(reason).trim(), rejected_at: at, rejections: count };
   state.current.stage = target;
   state.current.attempt = count + 1;
   state.current.next_action = `Revise after ${gate} was rejected ("${String(reason).trim()}"). ${fillAction(target, state.run.id)}`;
@@ -185,8 +218,13 @@ export function cmdPr({ dryRun = false } = {}) {
     process.stdout.write(`title: ${prTitle(state)}\nbase: ${state.run.base_branch}\nhead: ${state.run.branch}\nbody: ${posixRel(bodyPath)}\n\n${body}`);
     return;
   }
+  const head = (git(['rev-parse', '--abbrev-ref', 'HEAD']).stdout || '').trim();
+  if (head !== state.run.branch) die(`HEAD is on ${head || '(unknown)'}, not the run branch ${state.run.branch}; check it out first`);
   const n = commitsSince(state.run.baseline_sha);
   if (n < 1) die(`no commits since ${state.run.baseline_sha}; commit the run files first`);
+  if (!dryRun && decisionRecord(state).length && !adrCommitted(state)) {
+    die('run `node .agent-workflow/wf.mjs adr` and commit the docs/adr file it writes first (the decision record belongs in the PR)');
+  }
   const push = git(['push', '-u', 'origin', state.run.branch]);
   if (push.status !== 0) die(`git push failed: ${(push.stderr || '').trim()}`);
   const gh = spawnSync('gh', [
@@ -209,7 +247,7 @@ export function cmdPr({ dryRun = false } = {}) {
 }
 
 export function cmdVerify() {
-  const results = runVerifyTiers(['unit', 'lint', 'complexity', 'e2e', 'a11y']);
+  const results = runVerifyTiers(ALL_TIERS);
   let worst = 0;
   for (const r of results) {
     const label = r.skipped ? 'skip' : r.code === 0 ? 'ok' : `fail(${r.code})`;
@@ -231,14 +269,35 @@ export function cmdGuard(event, adapter) {
   const config = loadConfig();
   const input = adapter.normalize(event, payload);
   if (input.event === 'afterFileEdit') return cmdLog('afterFileEdit', adapter, input);
+  if (state?.run?.id && (input.command || input.filePath)) {
+    capture('content_scan', { text: `${input.command || ''}\n${input.filePath || ''}`.slice(0, 4000) });
+  }
   const decision = evaluate(input, { state, workflow, config });
+  if (decision.permission === 'deny') appendEvent('guard_blocked', { kind: input.command ? 'shell' : 'path' });
   const out = adapter.render(input.event, decision);
+  if (out.stderr) process.stderr.write(out.stderr);
   process.stdout.write(out.stdout);
   process.exit(out.exitCode);
 }
 
 export function cmdLog(event, adapter, input) {
   const i = input || adapter.normalize(event, parseHookPayload(readStdin()));
+  if (event === 'subagentStart') {
+    appendEvent('subagent_start', { agent: i.agent, started_at: new Date().toISOString() });
+    process.stdout.write('{}\n');
+    return;
+  }
+  if (event === 'subagentStop') {
+    const endedAt = new Date().toISOString();
+    appendEvent('subagent_stop', {
+      agent: i.agent,
+      status: i.status || 'completed',
+      durationMs: i.durationMs,
+      ended_at: endedAt,
+    });
+    process.stdout.write('{}\n');
+    return;
+  }
   appendEvent(event, {
     tool: i.tool || undefined,
     path: i.filePath || undefined,
@@ -321,6 +380,37 @@ export function cmdResume(runId) {
   const src = path.join(PATHS.runs, id, 'paused.state.json');
   if (!fs.existsSync(src)) die(`no paused state at ${src}`);
   fs.copyFileSync(src, PATHS.state);
+  const state = loadState();
+  if (state.schema === 2) {
+    migrateSchema2To3(state);
+    fs.writeFileSync(PATHS.state, `${JSON.stringify(state, null, 2)}\n`);
+  }
   appendEvent('resume', { id });
   process.stdout.write(`${formatStatus(loadState())}\n`);
+}
+
+function migrateSchema2To3(state) {
+  const mapStage = (id) => {
+    if (id === 'grill_spec') return 'planning';
+    if (id === 'test_plan' || id === 'gate_plan') return 'feasibility';
+    return id;
+  };
+  state.schema = 3;
+  if (state.current?.stage) {
+    state.current.stage = mapStage(state.current.stage);
+    state.current.next_action = fillAction(state.current.stage, state.run.id);
+  }
+  if (state.stages) {
+    const next = {};
+    for (const [k, v] of Object.entries(state.stages)) next[mapStage(k)] = v;
+    state.stages = next;
+  }
+  if (state.gates) {
+    const next = {};
+    for (const [k, v] of Object.entries(state.gates)) {
+      if (k === 'gate_plan') continue;
+      next[k] = v;
+    }
+    state.gates = next;
+  }
 }

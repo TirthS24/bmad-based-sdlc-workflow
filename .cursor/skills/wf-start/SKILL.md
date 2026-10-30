@@ -1,42 +1,40 @@
 ---
 name: wf-start
-description: "Pipeline stage: grill the spec. Invoked only by wf-run or the human; not for the model to select on its own."
+description: "Pipeline stage: planning — ingest, grill/synthesize, SRS, tickets, ACs. Invoked only by wf-run or the human."
 disable-model-invocation: true
 ---
 
 ## Required reading before acting
 
-- `.agent-workflow/config.json`
-- `.agent-workflow/standards.md` heading "Edge-case checklist"
+- `.agent-workflow/config.json` (`loop_caps.grill`)
+- `.agent-workflow/standards.md` headings for Ingestion, Grilling, Synthesis, SRS format, Ticket format, Persona tickets
 - `node .agent-workflow/wf.mjs status`
 
-## What this stage does
+## Flow (orchestrator = you)
 
-Runs the grill. One question at a time. Explore the codebase before asking. Do not invent answers. Walk the edge-case checklist; mark N/A with a reason.
+1. **Ingest** — dispatch `requirements-ingestor` (Task subagent). Write its output to `specs/spec-<id>/draft-requirements.md`.
+2. **Grill loop** — for round 1..`loop_caps.grill` (default 5):
+   - `requirements-griller` → new questions JSON; `[]` ends the loop.
+   - `requirements-synthesizer` → answers; `UNANSWERABLE` → ask the human one question at a time (AskUserQuestion), record in `grill/questions.json` with `answered_by: human`.
+   - Merge synthesis answers into `grill/questions.json` (`answered_by: synthesis`, `sources`).
+   - If the cap is hit with open questions → `/wf-unblock`, do not silently stop.
+3. **SRS** — `srs-writer` → write `SRS.md`.
+4. **Tickets** — `ticket-writer` (use persona-* skills) → write `tickets/<persona>/*.json`.
+5. **Acceptance tests** — fresh context: `acceptance-test-writer` → update ticket JSON with `test_cases`.
+6. **Validate** — `node .agent-workflow/wf.mjs tickets check` (fix until clean).
+7. **Review** — `/wf-spec-review`.
+8. **Optional research** — if gaps need `/wf-research`, run it, update SRS, re-run tickets check.
 
-Writes `specs/spec-<run-id>/SPEC.md` by calling the **bmad-spec** skill (`.agents/skills/bmad-spec` or `.cursor/skills/bmad-spec`). Do not reimplement its contract format. Pass these up front so it does not stall:
-
-- slug = the run id from `wf status`
-- output folder `specs/spec-<run-id>/` (team override in `_bmad/custom/bmad-spec.toml`)
-- number capabilities as **REQ-n** (not CAP-N)
-- each capability has **intent** and **success**
-- leave no `[OPEN QUESTION]` markers; ask the human until none remain
-
-bmad-spec is interactive by default and asks for missing input. Stay in that mode. Headless express mode is only for when the user already supplied the full ticket text.
-
-## Inputs
-
-- Jira/ticket context from `/wf-run`
-- Existing `SPEC.md` if this is a resume
+When `harnessName() === 'generic'`, wrap each subagent dispatch with `node .agent-workflow/wf.mjs agent start|end <name>`. Cursor/Claude hooks record timings automatically.
 
 ## Outputs
 
-- `specs/spec-<run-id>/SPEC.md` (and bmad-spec companions in that folder)
+- `draft-requirements.md`, `grill/questions.json`, `SRS.md`, `tickets/**/*.json`
 
 ## On finish
 
 ```
-node .agent-workflow/wf.mjs done grill_spec --result specs/spec-<run-id>/SPEC.md
+node .agent-workflow/wf.mjs done planning --result specs/spec-<id>/SRS.md
 ```
 
-Do not advance the stage yourself — wf.mjs verifies the postcondition.
+Do not advance the stage yourself — wf.mjs verifies postconditions.

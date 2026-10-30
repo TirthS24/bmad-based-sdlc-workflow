@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { VALID_APPROACH, VALID_SPEC, VALID_TEST_PLAN, fresh } from './helpers.mjs';
+import { AXES, VALID_APPROACH, VALID_SRS, fresh } from './helpers.mjs';
 
 test('spec to PR: six human gates, none between implement and review', (t) => {
   const repo = fresh(t);
@@ -22,9 +22,9 @@ test('spec to PR: six human gates, none between implement and review', (t) => {
   const id = repo.state().run.id;
   const dir = `specs/spec-${id}`;
 
-  at('grill_spec');
-  repo.file(`${dir}/SPEC.md`, VALID_SPEC);
-  ok(['done', 'grill_spec']);
+  at('planning');
+  repo.seedPlanning(id);
+  ok(['done', 'planning', '--result', `${dir}/SRS.md`]);
   at('gate_spec');
   assert.equal(repo.run(['done', 'gate_spec']).status, 1, 'agents cannot pass a gate with done');
   ok(['approve', 'gate_spec']);
@@ -34,12 +34,6 @@ test('spec to PR: six human gates, none between implement and review', (t) => {
   ok(['done', 'feasibility']);
   at('gate_approach');
   ok(['approve', 'gate_approach', '--approach', 'A']);
-
-  at('test_plan');
-  repo.file(`${dir}/test-plan.md`, VALID_TEST_PLAN);
-  ok(['done', 'test_plan']);
-  at('gate_plan');
-  ok(['approve', 'gate_plan']);
 
   at('tests');
   repo.config({ commands: { unit: 'echo "FAILED REQ-1"; exit 1', lint: '' } });
@@ -53,7 +47,7 @@ test('spec to PR: six human gates, none between implement and review', (t) => {
   repo.file('src/items.py', 'ok = True');
   ok(['done', 'implement']);
   at('review');
-  repo.file('review.md', '- [low] naming\nopen: 0\n');
+  repo.file('review.md', `${AXES}- [low] naming\n`);
   ok(['done', 'review', '--result', 'review.md']);
   at('gate_review');
   ok(['approve', 'gate_review']);
@@ -68,6 +62,7 @@ test('spec to PR: six human gates, none between implement and review', (t) => {
 
   at('pr');
   assert.equal(repo.guard('beforeShellExecution', { command: 'git commit -m x' }).status, 0, 'commit allowed after the final gate');
+  ok(['adr']);
   repo.git('add', '-A');
   repo.git('commit', '-q', '-m', 'feat: items endpoint');
   assert.equal(repo.run(['pr']).status, 1, 'no change summary yet');
@@ -77,11 +72,11 @@ test('spec to PR: six human gates, none between implement and review', (t) => {
   at('done');
 
   assert.deepEqual(trail, [
-    'grill_spec', 'gate_spec', 'feasibility', 'gate_approach', 'test_plan', 'gate_plan', 'tests', 'gate_tests',
+    'planning', 'gate_spec', 'feasibility', 'gate_approach', 'tests', 'gate_tests',
     'implement', 'review', 'gate_review', 'verify', 'gate_final', 'pr', 'done',
   ]);
   const gates = repo.events().filter((e) => e.type === 'approve').map((e) => e.gate);
-  assert.deepEqual(gates, ['gate_spec', 'gate_approach', 'gate_plan', 'gate_tests', 'gate_review', 'gate_final']);
+  assert.deepEqual(gates, ['gate_spec', 'gate_approach', 'gate_tests', 'gate_review', 'gate_final']);
 });
 
 test('implement may write whatever src_globs says', (t) => {

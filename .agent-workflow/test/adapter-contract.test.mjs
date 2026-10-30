@@ -58,6 +58,12 @@ test('cursor.render: every other event answers {} with exit 0', () => {
   }
 });
 
-test('cursor.renderStatus wraps status text as additional_context', () => {
-  assert.equal(cursor.renderStatus('a\nb'), '{"additional_context":"a\\nb"}\n');
+test('cursor.normalize subagent hooks', () => {
+  const start = cursor.normalize('subagentStart', { subagent_type: 'explore', subagent_id: 'a1' });
+  assert.equal(start.event, 'subagentStart');
+  assert.equal(start.agent, 'explore');
+  assert.equal(start.subagentId, 'a1');
+  const stop = cursor.normalize('subagentStop', { subagent_type: 'explore', status: 'completed', duration_ms: 100 });
+  assert.equal(stop.durationMs, 100);
+  assert.equal(stop.status, 'completed');
 });

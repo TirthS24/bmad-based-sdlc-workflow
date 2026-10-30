@@ -1,7 +1,7 @@
-// Builds the GitHub PR body from run state, SPEC.md and the git diff against the baseline.
+// Builds the GitHub PR body from run state, SRS.md, the tickets and the git diff against the baseline.
 import path from 'node:path';
 import { freezeHash } from './freeze.mjs';
-import { matchesAnyGlob } from './globs.mjs';
+import { matchesAnyGlob, productGlobs, unitGlobs } from './globs.mjs';
 import { git, readText } from './io.mjs';
 import { PATHS, posixRel, specDir } from './paths.mjs';
 import fs from 'node:fs';
@@ -28,11 +28,26 @@ function whatChanged(state) {
   return [summary, '', '<details><summary>Files changed</summary>', '', '```', ...(stat[0] ? shown : ['(no commits yet)']), '```', '', '</details>'];
 }
 
+// The two-line decision record from approach.md ("Decision" section), copied into the PR.
+export function decisionRecord(state) {
+  const lines = (readText(path.join(specDir(state), 'approach.md')) || '').split('\n');
+  const at = lines.findIndex((l) => /^\s*(#{1,4}\s*)?\*{0,2}Decision\b/i.test(l));
+  if (at < 0) return [];
+  const out = [];
+  const inline = lines[at].replace(/^\s*(#{1,4}\s*)?\*{0,2}Decision\*{0,2}\s*:?\s*\*{0,2}\s*/i, '').trim();
+  if (inline) out.push(inline);
+  for (const l of lines.slice(at + 1)) {
+    if (!l.trim() || /^#{1,4}\s/.test(l)) { if (out.length) break; if (/^#{1,4}\s/.test(l)) break; continue; }
+    out.push(l.trim());
+  }
+  return out.slice(0, 2);
+}
+
 function acceptanceCriteria(state) {
-  const spec = readText(path.join(specDir(state), 'SPEC.md'));
-  if (!spec) return ['- (SPEC.md not found)'];
-  return reqIds(spec).map((id) => {
-    const block = capabilityBlock(spec, id);
+  const srs = readText(path.join(specDir(state), 'SRS.md'));
+  if (!srs) return ['- (SRS.md not found)'];
+  return reqIds(srs).map((id) => {
+    const block = capabilityBlock(srs, id);
     const head = block.split('\n')[0].replace(/^[-*\s]*\*{0,2}REQ-\d+\*{0,2}[:\s-]*/, '').trim();
     const success = /success:\*{0,2}\s*(.+)/i.exec(block)?.[1]?.trim();
     return `- [ ] **${id}** ${head}${success ? ` — success: ${success}` : ''}`;
@@ -52,7 +67,7 @@ function testResults(state) {
 function riskNote(state, config) {
   const diff = git(['diff', '--name-only', `${state.run.baseline_sha}..HEAD`]);
   const changed = (diff.stdout || '').split('\n').map((f) => f.trim()).filter(Boolean);
-  const expected = [...(config.src_globs || []), ...(config.test_globs || []), 'specs/**'];
+  const expected = [...(config.src_globs || []), ...productGlobs(config), ...unitGlobs(config), 'specs/**'];
   const outside = changed.filter((f) => !matchesAnyGlob(f, expected));
   const deps = changed.filter((f) => DEP_MANIFESTS.test(f));
   const frozen = state.freeze?.test_files_hash;
@@ -81,8 +96,10 @@ export function buildPrBody(state, config) {
     '',
     `- Run: \`${state.run.id}\``,
     `- Approach: ${approach || 'n/a'} (see \`specs/spec-${state.run.id}/approach.md\`)`,
-    `- Spec: \`specs/spec-${state.run.id}/SPEC.md\``,
+    `- SRS: \`specs/spec-${state.run.id}/SRS.md\``,
+    `- Tickets: \`specs/spec-${state.run.id}/tickets/\``,
     '',
+    ...(decisionRecord(state).length ? ['## Decision', '', ...decisionRecord(state), ''] : []),
     '## What changed',
     '',
     ...whatChanged(state),

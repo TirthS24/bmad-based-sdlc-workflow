@@ -2,6 +2,8 @@
 // renders core decisions in Cursor's hook response format.
 // Contract: docs/adapter-contract.md.
 
+export const capabilities = { contentHooks: true };
+
 function extractFilePath(payload) {
   const input = payload.tool_input || payload.toolInput || payload.input || {};
   const candidates = [
@@ -29,6 +31,21 @@ function extractToolName(payload) {
 }
 
 export function normalize(event, payload) {
+  const ev = event || payload.hook_event_name || '';
+  if (ev === 'subagentStart' || ev === 'subagentStop') {
+    return {
+      event: ev,
+      tool: '',
+      filePath: null,
+      command: '',
+      loopCount: payload.loop_count ?? 0,
+      agent: payload.subagent_type || '',
+      subagentId: payload.subagent_id || null,
+      status: payload.status || null,
+      durationMs: payload.duration_ms ?? null,
+      raw: payload,
+    };
+  }
   return {
     event: event || payload.hook_event_name || '',
     tool: extractToolName(payload),

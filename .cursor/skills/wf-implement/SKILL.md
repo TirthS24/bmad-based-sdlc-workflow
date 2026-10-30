@@ -7,13 +7,14 @@ disable-model-invocation: true
 ## Required reading before acting
 
 - `.agent-workflow/config.json`
-- `specs/spec-<run-id>/SPEC.md`
+- `specs/spec-<run-id>/SRS.md`
+- `specs/spec-<run-id>/tickets/`
 - `specs/spec-<run-id>/approach.md` (approved option only)
 - `.agent-workflow/standards.md` heading "Coding rules"
 
 ## What this stage does
 
-Dispatch `implementer` for **one** attempt. Do not loop in this skill. The `stop` hook re-submits until `wf verify` is green or `loop_caps.implement` / a plateau is hit.
+Dispatch `implementer` for **one** attempt. It owns the unit tests; the frozen Playwright product tests stay untouched and must pass too (the implement check runs the e2e command when one is set). Do not loop in this skill. The `stop` hook re-submits until `wf verify` is green or `loop_caps.implement` / a plateau is hit.
 
 ## Inputs
 

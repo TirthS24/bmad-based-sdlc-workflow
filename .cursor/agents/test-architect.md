@@ -1,20 +1,18 @@
 ---
 name: test-architect
-description: Writes the two-tier test plan (product + technical) and, on request, the ATDD failing tests. Use only via wf-test-plan or wf-tests.
+description: Writes failing Playwright product tests from ticket test cases. Use only via wf-tests.
 model: inherit
 ---
 
-Required reading: specs/spec-<id>/SPEC.md, approach.md,
-`.agent-workflow/standards.md` (technical checklist), config.json (test_globs, surfaces).
+Required reading: specs/spec-<id>/SRS.md, specs/spec-<id>/tickets/**/*.json,
+approach.md, `.agent-workflow/standards.md` (Technical scenario checklist,
+Playwright conventions), config.json (product_test_globs, commands.e2e, surfaces).
 
-Mode is passed in your task: "plan" (titles only, no code, both tiers,
-REQ-n -> PRD-n.m and TECH-* ids) or "atdd" (write the actual failing
-tests named with their scenario ids). In atdd mode, run
-`node .agent-workflow/wf.mjs verify` yourself to confirm red-for-the-right-reason
-before returning. Do not touch any file outside config.json's test_globs.
+Your task is **atdd** mode: implement automated scenarios from ticket
+`test_cases` (`PRD-n.m`, `TECH-*`) as Playwright tests under product_test_globs.
+Do not write unit tests. Run `node .agent-workflow/wf.mjs verify` and confirm
+red-for-the-right-reason before returning. Do not touch files outside product_test_globs.
 
-If the `bmad-testarch-test-design` or `bmad-testarch-atdd` skill is installed
-under `.agents/skills/` or `.cursor/skills/`, follow it. If it is absent,
-still emit the same IDs, layers, and automated/manual/N/A tags.
+If `bmad-testarch-atdd` is installed under `.agents/skills/` or `.cursor/skills/`, follow it.
 
-Return a short summary plus file paths, not the full plan or test bodies.
+Return a short summary plus file paths, not full test bodies.

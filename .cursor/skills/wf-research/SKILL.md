@@ -1,0 +1,27 @@
+---
+name: wf-research
+description: "Pipeline stage helper: dispatch product-researcher for open spec questions and write research.md. Invoked only from wf-start; not for the model to select on its own."
+disable-model-invocation: true
+---
+
+## Required reading before acting
+
+- `.agent-workflow/standards.md` heading "Research rubric"
+- `specs/spec-<run-id>/SRS.md` (draft so far)
+
+## When to run
+
+Opt-in. Run only when the interview surfaced something the author cannot answer: a market, competitor, standard, regulation or unfamiliar technology. If the answers are already in the room, skip it. Ask the human before spending the search.
+
+## What this does
+
+1. Write a brief of at most five questions, each tied to a requirement or an open question. Strip internal data, names and PHI/PII from it.
+2. Pick the research pack for each question (market, competitive, domain, user-voice, technical) and a freshness window (default: sources from the last 12 months). If the `bmad-deep-recon` skill is installed under `.agents/skills/` or `.cursor/skills/`, name the pack and tell the researcher to follow it. Task `product-researcher` with the brief and the packs. Do not search in this thread.
+3. Write its final message verbatim to `specs/spec-<run-id>/research.md`.
+4. Show the human the "Effect on the spec" part and fold what they accept into `SRS.md` through the interview.
+
+## Outputs
+
+- `specs/spec-<run-id>/research.md`
+
+There is no `done` call. The artifact is read by `wf-feasibility` and checked by the spec gate review. Do not advance the stage yourself.

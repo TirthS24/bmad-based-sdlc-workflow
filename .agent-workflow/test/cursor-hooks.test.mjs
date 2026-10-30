@@ -29,15 +29,15 @@ const denyOut = (m) => `${JSON.stringify({ permission: 'deny', user_message: m, 
 
 test('every hooks.json command answers exactly as pinned', (t) => {
   const hooks = hookArgs();
-  assert.deepEqual(Object.keys(hooks).sort(), ['afterFileEdit', 'beforeShellExecution', 'preToolUse', 'sessionStart', 'stop']);
+  assert.deepEqual(Object.keys(hooks).sort(), ['afterFileEdit', 'beforeShellExecution', 'preToolUse', 'sessionStart', 'stop', 'subagentStart', 'subagentStop']);
   const { repo, id } = withRun(t);
 
   const status = repo.run(['status']).stdout.replace(/\n$/, '');
   assert.deepEqual(fire(repo, hooks.sessionStart, {}), { status: 0, stdout: `${JSON.stringify({ additional_context: status })}\n`, stderr: '' });
 
   const pre = (file) => fire(repo, hooks.preToolUse, { tool_name: 'Write', tool_input: { file_path: file } });
-  assert.deepEqual(pre(`specs/spec-${id}/SPEC.md`), { status: 0, stdout: allowOut, stderr: '' });
-  assert.deepEqual(pre('src/app.py'), { status: 2, stdout: denyOut('stage grill_spec cannot write src/app.py. Allowed: specs/**'), stderr: '' });
+  assert.deepEqual(pre(`specs/spec-${id}/SRS.md`), { status: 0, stdout: allowOut, stderr: '' });
+  assert.deepEqual(pre('src/app.py'), { status: 2, stdout: denyOut('stage planning cannot write src/app.py. Allowed: specs/**'), stderr: '' });
   assert.deepEqual(pre('.agent-workflow/state.json'), { status: 2, stdout: denyOut('protected file: .agent-workflow/state.json (only wf.mjs may write workflow state)'), stderr: '' });
 
   const sh = (command) => fire(repo, hooks.beforeShellExecution, { command });
@@ -48,6 +48,8 @@ test('every hooks.json command answers exactly as pinned', (t) => {
   assert.deepEqual(repo.events().at(-1), { ts: repo.events().at(-1).ts, type: 'afterFileEdit', tool: 'Write', path: 'specs/x.md' });
 
   assert.deepEqual(fire(repo, hooks.stop, {}), { status: 0, stdout: '{}\n', stderr: '' });
+  assert.deepEqual(fire(repo, hooks.subagentStart, { subagent_type: 'explore' }), { status: 0, stdout: '{}\n', stderr: '' });
+  assert.deepEqual(fire(repo, hooks.subagentStop, { subagent_type: 'explore', status: 'completed', duration_ms: 100 }), { status: 0, stdout: '{}\n', stderr: '' });
 });
 
 test('failClosed hooks still answer valid JSON on a malformed payload', (t) => {

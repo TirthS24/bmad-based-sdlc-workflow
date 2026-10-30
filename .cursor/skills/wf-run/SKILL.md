@@ -11,7 +11,7 @@ disable-model-invocation: true
 
 ## What this stage does
 
-Creates at most one active run. Parses the invocation as a Jira key (e.g. `PAT-1234`), pasted ticket text, or a short description. Uses the Atlassian plugin already in this environment when the input is a Jira key. Does not add MCP servers.
+Creates at most one active run. Parses the invocation as a Jira key, pasted ticket text, or a short description. Uses the Atlassian plugin when the input is a Jira key. After `wf run`, continue into `/wf-start` (planning pipeline: ingest → grill → SRS → tickets).
 
 ## Inputs
 

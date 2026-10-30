@@ -1,0 +1,13 @@
+[
+  {
+    "id": "Q-1",
+    "round": 1,
+    "question": "Confirm scope?",
+    "options": ["yes"],
+    "req_refs": ["REQ-1"],
+    "status": "answered",
+    "answer": "yes",
+    "answered_by": "human",
+    "sources": []
+  }
+]

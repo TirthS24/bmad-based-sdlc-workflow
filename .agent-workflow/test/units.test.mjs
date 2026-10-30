@@ -8,6 +8,8 @@ import { capabilityBlock, reqIds } from '../lib/postconditions.mjs';
 import { NEXT_ACTION, fillAction, formatStatus } from '../lib/state.mjs';
 import { guardShell } from '../lib/guards.mjs';
 import { parseArgs } from '../wf.mjs';
+import { VALID_SRS, VALID_QUESTIONS, VALID_TICKET_BE, withRun } from './helpers.mjs';
+import { checkQuestions, checkTickets } from '../lib/tickets.mjs';
 
 test('globToRegExp: *, ** and escaping', () => {
   assert.ok(globToRegExp('src/*.js').test('src/a.js'));
@@ -65,10 +67,10 @@ test('capabilityBlock slices from the id to the next capability or heading', () 
 });
 
 test('fillAction fills <id> and has text for every stage', () => {
-  assert.match(fillAction('grill_spec', 'r1'), /specs\/spec-r1\/SPEC\.md/);
+  assert.match(fillAction('planning', 'r1'), /specs\/spec-r1\/SRS\.md/);
   assert.equal(fillAction('nope', 'r1'), '');
   assert.deepEqual(Object.keys(NEXT_ACTION), [
-    'grill_spec', 'gate_spec', 'feasibility', 'gate_approach', 'test_plan', 'gate_plan', 'tests', 'gate_tests',
+    'planning', 'gate_spec', 'feasibility', 'gate_approach', 'tests', 'gate_tests',
     'implement', 'review', 'gate_review', 'verify', 'gate_final', 'pr', 'done',
   ]);
 });
@@ -99,4 +101,42 @@ test('parseArgs separates flags from positionals', () => {
 test('importing wf.mjs does not run the CLI', () => {
   // Reaching this line means the import at the top of this file returned without exiting.
   assert.equal(typeof parseArgs, 'function');
+});
+
+test('checkTickets: validation cases', (t) => {
+  const { repo, id } = withRun(t);
+  repo.seedPlanning(id);
+  const state = repo.state();
+  const srs = VALID_SRS;
+  const dir = `specs/spec-${id}/tickets/be`;
+  assert.equal(checkTickets(state, srs).length, 0);
+  repo.file(`${dir}/bad.json`, '{}');
+  assert.ok(checkTickets(state, srs).some((p) => /missing id|missing persona/.test(p)));
+  repo.file(`${dir}/bad.json`, `${JSON.stringify({ ...VALID_TICKET_BE, id: 'TKT-BE-001', persona: 'qa' }, null, 2)}\n`);
+  assert.ok(checkTickets(state, srs).some((p) => /persona folder/.test(p)));
+});
+
+test('checkQuestions: synthesis sources and human answers', (t) => {
+  const { repo, id } = withRun(t);
+  repo.seedPlanning(id);
+  const state = repo.state();
+  assert.equal(checkQuestions(state).length, 0);
+  repo.file(`specs/spec-${id}/grill/questions.json`, JSON.stringify([{
+    ...VALID_QUESTIONS[0],
+    answered_by: 'synthesis',
+    sources: [],
+  }]));
+  assert.ok(checkQuestions(state).some((p) => /no sources/.test(p)));
+  repo.file(`specs/spec-${id}/grill/questions.json`, JSON.stringify([{
+    ...VALID_QUESTIONS[0],
+    answered_by: 'synthesis',
+    sources: ['https://evil.slack.com/archives/C123'],
+  }]));
+  assert.ok(checkQuestions(state).some((p) => /Slack-only/.test(p)));
+  repo.file(`specs/spec-${id}/grill/questions.json`, JSON.stringify([{
+    ...VALID_QUESTIONS[0],
+    answered_by: 'human',
+    sources: [],
+  }]));
+  assert.equal(checkQuestions(state).length, 0);
 });

@@ -1,26 +1,31 @@
 ---
 name: verifier
-description: Runs the exploratory browser or API pass and assembles the `gate_final` evidence bundle. Use only via wf-verify.
+description: Runs the product test suite and assembles the `gate_final` evidence bundle. Use only via wf-verify.
 model: inherit
 ---
 
-Required reading: specs/spec-<id>/test-plan.md (technical tier),
-config.json (dev_url, surfaces, a11y states to scan).
+Required reading: specs/spec-<id>/SRS.md, specs/spec-<id>/tickets/, config.json (commands,
+dev_url, surfaces), `.agent-workflow/standards.md` (Technical scenario
+checklist, Playwright conventions).
 
-Walk the product flows named in test-plan.md at config.json's dev_url.
-Use the editor browser tools for UI surfaces. Do not add MCP servers.
-Do not run the E2E/ stage, UAT, or prod Playwright suites.
+You run and report; you do not fix. Run `node .agent-workflow/wf.mjs verify`.
+It runs seed and the e2e command, writes the Playwright JSON report, and
+exits non-zero on any failure. Read the result and the failing output.
 
-If commands.e2e is empty: probe dev_url first. If it does not respond,
-write `e2e skipped` into the evidence bundle and return; that skip is
-not a failure. If it responds, walk the UI surfaces.
+On a failure, report the failing scenario ids and the evidence (trace,
+screenshot, console and network errors from the Playwright report) and send
+it back through wf-implement with a regression-test requirement. A test that
+passed only on retry is flaky: list it for the human, do not retry it
+yourself. Never edit a product test to make it pass.
 
-For each UI surface, trigger hover/focus/dark states before any
-contrast check — a scan taken in the default state misses state-only
-failures. Capture console errors and failed network requests during
-each flow; treat a real one as a bug, not a note, and send it back
-through wf-implement with a regression-test requirement rather than
-fixing it yourself. Write screenshots and a short pass/fail table per
-tier to `.agent-workflow/runs/<id>/evidence/`.
+If a surface is UI and an accessibility command is configured, trigger
+hover, focus and dark states before the scan, since a default-state scan
+misses state-only failures.
 
-Return a short summary plus evidence file paths.
+Optional, when the harness has browser tools and the human asked for it:
+a short exploratory pass at dev_url. It supplements the scripted suite and
+never replaces it.
+
+Collect the Playwright report, traces and screenshots under
+`.agent-workflow/runs/<id>/evidence/`. Return a short pass/fail table per
+tier plus the evidence paths.

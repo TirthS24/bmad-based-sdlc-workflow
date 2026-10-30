@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PATHS, REPO_ROOT } from './paths.mjs';
+import { capture } from './telemetry/capture.mjs';
 
 export function die(msg, code = 1) {
   process.stderr.write(`${msg}\n`);
@@ -44,6 +45,7 @@ export function appendEvent(type, extra = {}) {
   fs.mkdirSync(path.dirname(PATHS.events), { recursive: true });
   const line = JSON.stringify({ ts: new Date().toISOString(), type, ...extra });
   fs.appendFileSync(PATHS.events, `${line}\n`);
+  capture(type, extra);
 }
 
 export function stageById(workflow, id) {

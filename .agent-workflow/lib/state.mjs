@@ -3,16 +3,14 @@ import { loadConfig, loadWorkflow, stageById } from './io.mjs';
 import { expandWritePatterns } from './globs.mjs';
 
 export const NEXT_ACTION = {
-  grill_spec: 'Run /wf-start. Grill one question at a time. Write specs/spec-<id>/SPEC.md via bmad-spec using REQ-n ids. Then: node .agent-workflow/wf.mjs done grill_spec --result specs/spec-<id>/SPEC.md',
-  gate_spec: 'Human: review SPEC.md, then /wf-approve gate_spec (or /wf-reject gate_spec <reason>)',
-  feasibility: 'Run /wf-feasibility (dispatches feasibility-analyst). Write approach.md. Then: node .agent-workflow/wf.mjs done feasibility --result specs/spec-<id>/approach.md',
+  planning: 'Run /wf-start. … Then: node .agent-workflow/wf.mjs done planning --result specs/spec-<id>/SRS.md',
+  gate_spec: 'Human: review SRS.md and persona tickets, then /wf-approve gate_spec (or /wf-reject gate_spec <reason>)',
+  feasibility: 'Run /wf-feasibility (dispatches solution-architect). Write approach.md. Then: node .agent-workflow/wf.mjs done feasibility --result specs/spec-<id>/approach.md',
   gate_approach: 'Human: review approach.md, choose A|B|C, then /wf-approve gate_approach --approach <A|B|C> (or /wf-reject gate_approach <reason>)',
-  test_plan: 'Run /wf-test-plan (test-architect plan mode). Write test-plan.md. Then: node .agent-workflow/wf.mjs done test_plan --result specs/spec-<id>/test-plan.md',
-  gate_plan: 'Human: review test-plan.md, then /wf-approve gate_plan (or /wf-reject gate_plan <reason>)',
   tests: 'Run /wf-tests (test-architect atdd). Then: node .agent-workflow/wf.mjs done tests --result <test path or dir>',
   gate_tests: 'Human: review the new failing tests, then /wf-approve gate_tests (or /wf-reject gate_tests <reason>)',
   implement: 'Run /wf-implement (one attempt). The stop hook re-submits until green or the cap.',
-  review: 'Run /wf-review on the main thread with spec and baseline supplied. Then: node .agent-workflow/wf.mjs done review --result <review output path>',
+  review: 'Run /wf-review (dispatches code-reviewer; fixes go to implementer). Then: node .agent-workflow/wf.mjs done review --result <review output path>',
   gate_review: 'Human: read review.md (decision-needed items), then /wf-approve gate_review (or /wf-reject gate_review <reason>, which returns to implement)',
   verify: 'Run /wf-verify. Then: node .agent-workflow/wf.mjs done verify --result .agent-workflow/runs/<id>/evidence/',
   gate_final: 'Human: read the evidence bundle, then /wf-approve gate_final. This unlocks commit, push and the PR (or /wf-reject gate_final <reason>)',
@@ -30,9 +28,9 @@ export function emptyState(run, workflow) {
     if (s.executor === 'human') gates[s.id] = { status: 'pending' };
   }
   return {
-    schema: 2,
+    schema: 3,
     run,
-    current: { stage: 'grill_spec', next_action: fillAction('grill_spec', run.id), attempt: 1 },
+    current: { stage: 'planning', next_action: fillAction('planning', run.id), attempt: 1 },
     gates,
     rejections: [],
     stages: {},

@@ -1,28 +1,105 @@
 {
-  "schema": 2,
+  "schema": 3,
   "stages": [
-    { "id": "grill_spec", "executor": "main", "writes": ["specs/**"], "next": "gate_spec" },
-    { "id": "gate_spec", "executor": "human", "writes": [], "next": "feasibility" },
-    { "id": "feasibility", "executor": "agent:feasibility-analyst", "writes": ["specs/**"], "next": "gate_approach" },
-    { "id": "gate_approach", "executor": "human", "writes": [], "next": "test_plan" },
-    { "id": "test_plan", "executor": "agent:test-architect", "writes": ["specs/**"], "next": "gate_plan" },
-    { "id": "gate_plan", "executor": "human", "writes": [], "next": "tests" },
-    { "id": "tests", "executor": "agent:test-architect", "writes": ["<test_globs>"], "next": "gate_tests" },
-    { "id": "gate_tests", "executor": "human", "writes": [], "next": "implement" },
-    { "id": "implement", "executor": "agent:implementer", "writes": ["<src_globs>", "!<test_globs>"], "max_attempts": 5, "next": "review" },
-    { "id": "review", "executor": "main+bmad-code-review", "writes": ["<src_globs>", "!<test_globs>"], "max_rounds": 3, "next": "gate_review" },
-    { "id": "gate_review", "executor": "human", "writes": [], "on_reject": "implement", "next": "verify" },
-    { "id": "verify", "executor": "agent:verifier", "writes": [], "max_fix_rounds": 2, "next": "gate_final" },
-    { "id": "gate_final", "executor": "human", "writes": [], "next": "pr" },
-    { "id": "pr", "executor": "main", "writes": [], "next": "done" }
+    {
+      "id": "planning",
+      "executor": "main",
+      "writes": [
+        "specs/**"
+      ],
+      "next": "gate_spec"
+    },
+    {
+      "id": "gate_spec",
+      "executor": "human",
+      "writes": [],
+      "next": "feasibility"
+    },
+    {
+      "id": "feasibility",
+      "executor": "agent:solution-architect",
+      "writes": [
+        "specs/**"
+      ],
+      "next": "gate_approach"
+    },
+    {
+      "id": "gate_approach",
+      "executor": "human",
+      "writes": [],
+      "next": "tests"
+    },
+    {
+      "id": "tests",
+      "executor": "agent:test-architect",
+      "writes": [
+        "<product_test_globs>"
+      ],
+      "next": "gate_tests"
+    },
+    {
+      "id": "gate_tests",
+      "executor": "human",
+      "writes": [],
+      "next": "implement"
+    },
+    {
+      "id": "implement",
+      "executor": "agent:implementer",
+      "writes": [
+        "<src_globs>",
+        "<unit_test_globs>",
+        "!<product_test_globs>"
+      ],
+      "max_attempts": 5,
+      "next": "review"
+    },
+    {
+      "id": "review",
+      "executor": "agent:code-reviewer",
+      "writes": [
+        "<src_globs>",
+        "<unit_test_globs>",
+        "!<product_test_globs>"
+      ],
+      "max_rounds": 3,
+      "next": "gate_review"
+    },
+    {
+      "id": "gate_review",
+      "executor": "human",
+      "writes": [],
+      "on_reject": "implement",
+      "next": "verify"
+    },
+    {
+      "id": "verify",
+      "executor": "agent:verifier",
+      "writes": [],
+      "max_fix_rounds": 2,
+      "next": "gate_final"
+    },
+    {
+      "id": "gate_final",
+      "executor": "human",
+      "writes": [],
+      "next": "pr"
+    },
+    {
+      "id": "pr",
+      "executor": "main",
+      "writes": [],
+      "next": "done"
+    }
   ],
   "guarded_shell_patterns": [
-    "^git\\s+commit",
-    "^git\\s+push",
-    "^gh\\s+pr\\s+create"
+    "(^|[;&|(`\\n]|\\$\\()\\s*git(\\s+(-c|-C)\\s+\\S+|\\s+--[\\w-]+(=\\S+)?)*\\s+commit(?![\\w-])",
+    "(^|[;&|(`\\n]|\\$\\()\\s*git(\\s+(-c|-C)\\s+\\S+|\\s+--[\\w-]+(=\\S+)?)*\\s+push(?![\\w-])",
+    "(^|[;&|(`\\n]|\\$\\()\\s*gh\\s+pr\\s+create(?![\\w-])"
   ],
   "protected_files": [
     ".agent-workflow/state.json",
-    ".agent-workflow/workflow.json"
+    ".agent-workflow/workflow.json",
+    ".agent-workflow/project.json"
   ]
 }

@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "max_skill_lines": 150,
+  "stages": {
+    "planning": {
+      "skills": [
+        "wf-start",
+        "wf-research",
+        "wf-spec-review",
+        "persona-ui-ux",
+        "persona-fe",
+        "persona-be",
+        "persona-qa"
+      ],
+      "agents": [
+        "requirements-ingestor",
+        "requirements-griller",
+        "requirements-synthesizer",
+        "srs-writer",
+        "ticket-writer",
+        "acceptance-test-writer",
+        "product-researcher"
+      ],
+      "rules": [
+        "Spec quality",
+        "Edge-case checklist",
+        "Research rubric",
+        "Ingestion rubric",
+        "Grilling rubric",
+        "Synthesis rubric",
+        "SRS format",
+        "Ticket format",
+        "Persona tickets"
+      ],
+      "check": "SRS.md sections and REQ success lines; grill/questions.json fully answered; persona tickets pass wf tickets check"
+    },
+    "gate_spec": { "skills": ["wf-approve", "wf-reject", "wf-gate-brief", "wf-jira-tickets"], "rules": ["Gate brief format"] },
+    "feasibility": {
+      "skills": ["wf-feasibility"],
+      "agents": ["solution-architect"],
+      "rules": ["Feasibility rubric", "Architecture decision record", "Security and privacy lens", "Data and migration lens", "Dependency policy"],
+      "check": "approach.md: verdict, 2+ approaches, one-commit line, decision, non-functional, risks, rollback"
+    },
+    "gate_approach": { "skills": ["wf-approve", "wf-reject", "wf-gate-brief"], "rules": ["Gate brief format"] },
+    "tests": {
+      "skills": ["wf-tests", "wf-playwright-e2e", "product-quality-assurance"],
+      "agents": ["test-architect"],
+      "rules": ["Playwright conventions"],
+      "check": "product tests red for the right reason, citing ids; freeze hash stored"
+    },
+    "gate_tests": { "skills": ["wf-approve", "wf-reject", "wf-gate-brief"], "rules": ["Gate brief format"] },
+    "implement": {
+      "skills": ["wf-implement", "unit-testing-test-generate", "frontend-design"],
+      "agents": ["implementer"],
+      "rules": ["Coding rules", "Dependency policy"],
+      "check": "unit, lint, typecheck and e2e pass"
+    },
+    "review": {
+      "skills": ["wf-review"],
+      "agents": ["code-reviewer"],
+      "rules": ["Review rubric", "Review finding format", "Security and privacy lens", "Data and migration lens"],
+      "check": "review.md: one section per axis, tagged findings, no open high"
+    },
+    "gate_review": { "skills": ["wf-approve", "wf-reject", "wf-gate-brief"], "rules": ["Gate brief format"] },
+    "verify": {
+      "skills": ["wf-verify", "wf-playwright-e2e"],
+      "agents": ["verifier"],
+      "rules": ["Technical scenario checklist", "Playwright conventions"],
+      "check": "every tier passes; each automated e2e scenario has a passing test"
+    },
+    "gate_final": { "skills": ["wf-approve", "wf-reject", "wf-gate-brief"], "rules": ["Gate brief format"] },
+    "pr": { "skills": ["wf-pr"], "rules": ["PR summary guide"], "check": "ADR committed, PR URL and at least one commit" }
+  },
+  "shared": {
+    "skills": ["wf-run", "wf-onboard", "wf-pause", "wf-resume", "wf-abort", "wf-unblock", "wf-goto"]
+  }
+}

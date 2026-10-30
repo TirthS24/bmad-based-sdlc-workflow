@@ -24,12 +24,23 @@ export function globToRegExp(glob) {
   return new RegExp(`^${out}$`);
 }
 
+// Product (flow) tests are frozen at gate_tests; unit tests belong to the implementer.
+// Configs from before the split only have test_globs, which then means product tests.
+export const productGlobs = (config) => config.product_test_globs ?? config.test_globs ?? [];
+export const unitGlobs = (config) => config.unit_test_globs ?? [];
+
 export function expandWritePatterns(patterns, config) {
   const out = [];
+  const sets = {
+    src_globs: config.src_globs || [],
+    test_globs: productGlobs(config),
+    product_test_globs: productGlobs(config),
+    unit_test_globs: unitGlobs(config),
+  };
   for (const p of patterns) {
-    const token = /^(!?)<(test_globs|src_globs)>$/.exec(p);
+    const token = /^(!?)<(test_globs|product_test_globs|unit_test_globs|src_globs)>$/.exec(p);
     if (token) {
-      for (const g of config[token[2]] || []) out.push(`${token[1]}${g}`);
+      for (const g of sets[token[2]]) out.push(`${token[1]}${g}`);
     } else {
       out.push(p);
     }

@@ -1,36 +1,33 @@
 ---
 name: wf-review
-description: "Pipeline stage: local bmad-code-review plus test review on the main thread. Invoked only by the pipeline; not for the model to select on its own."
+description: "Pipeline stage: independent code review by the code-reviewer agent, fixes via the implementer. Invoked only by the pipeline; not for the model to select on its own."
 disable-model-invocation: true
 ---
 
 ## Required reading before acting
 
 - `.agent-workflow/config.json`
-- `.agent-workflow/standards.md` heading "Review rubric"
-- `specs/spec-<run-id>/SPEC.md`
+- `.agent-workflow/standards.md` headings "Review rubric" and "Review finding format"
+- `specs/spec-<run-id>/SRS.md`
 - `specs/spec-<run-id>/approach.md`
 
 ## What this stage does
 
-Run **bmad-code-review from this main thread** (it spawns its own reviewers; nested subagents cannot nest further). Supply target and spec up front so it never asks:
+Thin dispatcher. The reviewer is independent: it never sees the implementer's transcript and never edits code.
 
-- Review target: uncommitted changes plus commits since `state.run.baseline_sha` (branch diff against that SHA). Say this explicitly: "uncommitted" / working tree if there is no commit yet, otherwise "commit range `baseline_sha..HEAD` plus uncommitted".
-- `spec_file`: `specs/spec-<run-id>/SPEC.md`
-- Also pass approach.md as claims/context
-- Do not use `gh pr view`
-
-If the `bmad-testarch-test-review` skill is installed under `.agents/skills/` or `.cursor/skills/`, call it after the code review. Findings tagged `decision-needed` go into the review gate (`gate_review`) report, not a human interrupt now.
-
-Write the combined review to `.agent-workflow/runs/<id>/review.md`. `high` / `decision-needed` still open block `wf done review`.
+1. Task `code-reviewer` with the spec path, the approach path and the baseline (`state.run.baseline_sha`, shown by `wf status`). Do not paste the implementation history.
+2. Write its final message verbatim to `.agent-workflow/runs/<id>/review.md`.
+3. If any `high` or `decision-needed` finding is open, dispatch `implementer` directly with the findings (not your opinion of them), then repeat from step 1. Do not run `/wf-implement` or `wf done implement` here; the run is already in `review`. Stop at the review round cap; `decision-needed` items the human must decide stay in the file and go to `gate_review`.
+4. When the diff touches what a lens covers (security and privacy, data and migrations, test quality, edge cases), tell the reviewer to apply that lens; if `bmad-code-review` layers or `bmad-review` lenses are installed, it may use them.
+5. If the `bmad-testarch-test-review` skill is installed under `.agents/skills/` or `.cursor/skills/`, run it after the first pass and append its findings in the same format.
 
 ## Inputs
 
-- Diff since baseline, SPEC.md, approved approach
+- Diff since baseline, SRS.md, approved approach
 
 ## Outputs
 
-- `.agent-workflow/runs/<id>/review.md` (may also patch `src/**` within round cap; never frozen tests)
+- `.agent-workflow/runs/<id>/review.md`
 
 ## On finish
 
