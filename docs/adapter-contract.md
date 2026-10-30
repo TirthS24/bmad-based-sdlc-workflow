@@ -114,3 +114,21 @@ Adapter maps hook names to the same normalized `event` values as Cursor (`subage
 4. `wf agent start|end <name>` — **generic adapter only** (no hooks); Cursor and Claude Code must not double-count.
 
 Contract tests should cover Cursor stop-with-duration, start-without-stop at done, stop-without-pending-start, and Claude Code id pairing.
+
+## Spike: Claude Code subagent frontmatter (stage 8)
+
+Source: Claude Code subagent documentation (code.claude.com/docs/en/sub-agents).
+
+- Required fields: `name` (unique, no `:`, not starting with `-`) and `description`. Field names are case-sensitive camelCase. Unknown fields are ignored silently.
+- Tool lists:
+  - `tools` is an allowlist. Omitted means every tool available to subagents. Set means only those tools. Accepts a comma-separated string or a YAML list.
+  - `disallowedTools` is a denylist, applied first. When both are set, `tools` is resolved against what remains.
+  - An entry with a specifier, such as `Bash(git push *)`, removes the whole tool. Per-command blocking belongs in a `permissions.deny` setting.
+- MCP names: `mcp__<server>` or `mcp__<server>__<tool>`. Wildcards: `mcp__<server>__*`. A server name containing `__` needs the full name with `__*` in `tools`.
+- Preload skills with `skills`, not by listing `Skill` in `tools`.
+
+Consequences for the installer (chunk 10):
+- A read-only agent (`readonly: true`) becomes `tools: Read, Grep, Glob` (plus `Bash` only where the agent needs it, which read-only agents do not). The installer test asserts there is no `Write`, `Edit` or `Bash`.
+- A writer agent gets `tools: Read, Write, Edit, Grep, Glob`, with no `Bash`. The diff check (stage 5) covers anything written another way.
+- `requirements-ingestor` and `synthesizer` keep their MCP access with `mcp__<server>__*` entries, not a blanket allow.
+- Use `tools` for the allowlist. `disallowedTools: Bash` is an alternative for writers, and either form is valid. The installer uses `tools` so the list is explicit.
