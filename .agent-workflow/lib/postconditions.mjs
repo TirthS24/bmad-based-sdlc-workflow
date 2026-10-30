@@ -17,13 +17,7 @@ export function reqIds(specText) {
   return [...ids];
 }
 
-export function capabilityBlock(text, id) {
-  const idx = text.indexOf(id);
-  if (idx < 0) return '';
-  const rest = text.slice(idx);
-  const next = rest.search(/\n(?=- \*\*REQ-|\n## )/);
-  return next < 0 ? rest : rest.slice(0, next);
-}
+export { capabilityBlock } from './tickets.mjs';
 
 export function checkPlanning(state) {
   const text = readText(path.join(specDir(state), 'SRS.md'));
@@ -62,7 +56,7 @@ export function checkFeasibility(state) {
     problems.push(problem('approach verdict', 'no verdict', 'as-is, with-changes or not-satisfiable', 'Verdict: with-changes'));
   }
   // The decision-record sections are headings too, but they are not approaches.
-  const approaches = (text.match(/^#{2,3}\s+.+/gm) || []).filter((h) => !/^#{2,3}\s+\W*(Decision|Non-functional|Risks|Rollback)\b/i.test(h));
+  const approaches = (text.match(/^#{2,3}\s+.+/gm) || []).filter((h) => !/^#{2,3}\s+[\W\d]*(Decision|Non-functional|Risks|Rollback)\b/i.test(h));
   const named = (text.match(/\bapproach\s+[ABC1-3]\b/gi) || []).length;
   if (approaches.length < 2 && named < 2) {
     problems.push(problem('two approaches', `${Math.max(approaches.length, named)} approach headings`, 'at least 2 approaches', '### Approach A: extend the existing service'));
@@ -71,7 +65,7 @@ export function checkFeasibility(state) {
     problems.push(problem('single-commit fit line', 'no such line', 'a line saying the change fits one commit, or how it splits', 'Fits one commit: yes'));
   }
   for (const part of ['Decision', 'Non-functional', 'Risks', 'Rollback']) {
-    if (!new RegExp(`^\\s*(#{1,4}\\s*)?\\*{0,2}${part}\\b`, 'im').test(text)) {
+    if (!new RegExp(`^\\s*(#{1,4}\\s*)?(\\d+([.)]\\s*|\\s+))?\\*{0,2}${part}\\b`, 'im').test(text)) {
       problems.push(problem(`${part} section`, 'no such heading', `a "${part}" heading`, `## ${part}`));
     }
   }

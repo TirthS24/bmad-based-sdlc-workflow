@@ -38,7 +38,7 @@ export function srsSectionChecks(text) {
     problems.push(problem('no open questions in SRS.md', 'a [OPEN QUESTION] marker', 'every question answered or escalated', 'Answered in grill/questions.json; marker removed'));
   }
   for (const [num, name] of SRS_SECTIONS) {
-    if (!new RegExp(`^#{1,3}\\s*${num}\\s+${name}\\b`, 'im').test(text)) {
+    if (!new RegExp(`^#{1,3}\\s*${num}[.)]?\\s+${name}\\b`, 'im').test(text)) {
       problems.push(problem(`SRS section ${num}`, 'no such heading', `a "## ${num} ${name}" heading`, `## ${num} ${name}`));
     }
   }
@@ -47,23 +47,30 @@ export function srsSectionChecks(text) {
     problems.push(problem('numbered REQ ids', 'no REQ-n ids', 'REQ-1, REQ-2, ... each with a success condition', '- **REQ-1** Users can sign in. **success:** login returns 200'));
   }
   for (const id of ids) {
-    const block = srsReqBlock(text, id);
+    const block = capabilityBlock(text, id);
     if (!block || !/\*\*success:\*\*|success:/i.test(block)) {
       problems.push(problem(`${id} success condition`, 'no success line', 'a **success:** line in the REQ block', `- **${id}** ... **success:** observable outcome`));
     }
   }
-  if (!/^#{1,3}\s*6\s+Non-goals\b/im.test(text) && !/^#{1,3}\s+Non-goals\b/im.test(text)) {
+  if (!/^#{1,3}\s*6[.)]?\s+Non-goals\b/im.test(text) && !/^#{1,3}\s+Non-goals\b/im.test(text)) {
     problems.push(problem('Non-goals section', 'no Non-goals heading', 'a "## 6 Non-goals" heading', '## 6 Non-goals'));
   }
   return problems;
 }
 
-function srsReqBlock(text, id) {
-  const idx = text.indexOf(id);
-  if (idx < 0) return '';
-  const rest = text.slice(idx);
-  const next = rest.search(/\n(?=- \*\*REQ-|\n## )/);
-  return next < 0 ? rest : rest.slice(0, next);
+// The block for one REQ: its definition line (`- **REQ-n**`) up to the next REQ or heading. A
+// mention elsewhere does not count, and REQ-1 does not match inside REQ-10.
+export function capabilityBlock(text, id) {
+  const def = new RegExp(`^\\s*-\\s*\\*\\*${id}(?!\\d)`, 'm').exec(text);
+  if (!def) return '';
+  const body = text.slice(def.index + 1);
+  const next = body.search(/\n(?=\s*-\s*\*\*REQ-\d|#{1,3}\s)/);
+  return next < 0 ? text.slice(def.index) : text.slice(def.index, def.index + 1 + next);
+}
+
+// Source paths may carry a line range: path:12, path:12-30 or path#L12-L30.
+export function stripLineRange(s) {
+  return String(s || '').replace(/#L\d+(-L\d+)?$/, '').replace(/:\d+(-\d+)?$/, '');
 }
 
 function ticketsRoot(state) {
@@ -97,7 +104,7 @@ function isConfluenceUrl(s) {
 }
 
 function isRepoPath(s) {
-  const t = String(s || '').replace(/^\.\//, '');
+  const t = stripLineRange(s).replace(/^\.\//, '');
   if (!t || t.includes('://')) return false;
   return fs.existsSync(path.join(repoRoot(), t));
 }
